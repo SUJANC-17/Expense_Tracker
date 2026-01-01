@@ -238,8 +238,8 @@ function drawTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][],
     let currentX = startX;
     doc.fillColor(COLORS.text).fontSize(10).font('Helvetica-Bold');
     headers.forEach((header, i) => {
-        doc.text(header, currentX + 5, doc.y + 10, { width: colWidths[i] - 10, align: 'left' });
-        currentX += colWidths[i];
+        doc.text(header, currentX + 5, doc.y + 10, { width: (colWidths[i] || 0) - 10, align: 'left' });
+        currentX += (colWidths[i] || 0);
     });
 
     doc.y += headerHeight;
@@ -261,12 +261,12 @@ function drawTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][],
         row.forEach((cell, i) => {
             const isAmount = cell.startsWith('Rs.');
             doc.text(cell, currentX + 5, rowY + 8, {
-                width: colWidths[i] - 10,
+                width: (colWidths[i] || 0) - 10,
                 align: isAmount ? 'right' : 'left',
                 lineBreak: false,
                 ellipsis: true
             });
-            currentX += colWidths[i];
+            currentX += (colWidths[i] || 0);
         });
 
         doc.y = rowY + rowHeight;

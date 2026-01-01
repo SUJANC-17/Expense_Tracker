@@ -32,38 +32,41 @@ Open MySQL command line or phpMyAdmin and run:
 CREATE DATABASE expense_tracker;
 ```
 
-### 3. Start Backend Server
+### One-Click Start (Recommended)
+Double-click `start_all.bat` in the root folder. It will open 4 windows for you automatically.
 
-```bash
-cd d:\Expense-Tracker\server
-npm run dev
-```
+### Manual Startup (If double-click doesn't work)
 
-**Expected output:**
-```
-Server is running on port 5000
-Connected to MySQL database
-Database tables initialized successfully
-Monthly report scheduler started
-```
+You need **4 separate terminals**.
 
-### 4. Start Frontend (in a NEW terminal)
+1. **Backend**:
+   ```bash
+   cd server
+   npm run dev
+   ```
 
-```bash
-cd d:\Expense-Tracker\client
-npm install
-npm run dev
-```
+2. **Frontend**:
+   ```bash
+   cd client
+   npm run dev
+   ```
 
-**Expected output:**
-```
-VITE ready in xxx ms
-➜  Local:   http://localhost:5173/
-```
+3. **Proxy Server** (Important!):
+   ```bash
+   cd server
+   node proxy.js
+   ```
+
+4. **Ngrok**:
+   ```bash
+   cd ngrok
+   ngrok start --all --config ngrok_config.yml
+   ```
 
 ### 5. Open Application
 
-Go to: `http://localhost:5173`
+Go to your ngrok URL: **https://elke-nonstrategic-shad.ngrok-free.dev**
+(Or find it at http://localhost:4040)
 
 ---
 
