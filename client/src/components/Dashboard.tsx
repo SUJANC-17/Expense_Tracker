@@ -187,6 +187,14 @@ const Dashboard: React.FC = () => {
                         <p className="card-value">₹{Number(summary.balance).toFixed(2)}</p>
                     </div>
                 </div>
+
+                <div className="summary-card glass-card unpaid-alert" aria-label="Amount Owed to You">
+                    <div className="card-icon">⏳</div>
+                    <div className="card-content">
+                        <h3 className="card-label">Amount Owed</h3>
+                        <p className="card-value">₹{Number(summary.total_unpaid_splits).toFixed(2)}</p>
+                    </div>
+                </div>
             </div>
 
             <div className="dashboard-grid">
@@ -280,14 +288,8 @@ const Dashboard: React.FC = () => {
                     )}
 
                     {summary.total_unpaid_splits > 0 && (
-                        <div className="unpaid-alert glass-card">
-                            <div className="alert-icon">⏳</div>
-                            <div className="alert-content">
-                                <h3 className="alert-title">Amount Owed to You</h3>
-                                <p className="alert-amount">₹{Number(summary.total_unpaid_splits).toFixed(2)}</p>
-                                <p className="alert-note">(Across all months)</p>
-                            </div>
-                        </div>
+                        /* Removed from here, moved to summary-cards */
+                        null
                     )}
                 </div>
             </div>

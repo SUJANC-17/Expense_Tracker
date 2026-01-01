@@ -8,9 +8,16 @@
     margin-bottom: 3rem;
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
+    /* Center Vertically */
     gap: 2rem;
     flex-wrap: wrap;
+}
+
+.title-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .report-controls {
@@ -40,18 +47,28 @@
 
 .summary-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    /* 5 cards = min 200px each fits on >1000px screens */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1.5rem;
     margin-bottom: 3rem;
 }
 
 .summary-card {
     display: flex;
+    flex-direction: column;
+    /* Stack Content Vertically for grid balance */
+    align-items: flex-start;
+    /* Left align for professional look, or center? User asked for center. */
+    justify-content: center;
     align-items: center;
-    gap: 1.5rem;
-    padding: 2rem;
+    /* User requested centered content */
+    gap: 1rem;
+    padding: 1.5rem;
     position: relative;
     overflow: hidden;
+    min-height: 180px;
+    /* Ensure equal height */
+    text-align: center;
 }
 
 .summary-card::before {
@@ -59,25 +76,80 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px;
+    width: 6px;
+    /* Slightly thicker accent */
     height: 100%;
-    background: linear-gradient(180deg, var(--primary), var(--secondary));
+    /* Gradient handled by specific classes */
+}
+
+/* Enhanced Gradient Backgrounds for Cards (Subtle Tint) */
+/* Calm Card Styling - Soft Tints */
+.income-card {
+    background: linear-gradient(135deg, rgba(236, 252, 203, 0.5) 0%, rgba(255, 255, 255, 0.8) 100%);
+    /* Lime-100 tint */
+    border: 1px solid rgba(101, 163, 13, 0.1);
 }
 
 .income-card::before {
-    background: linear-gradient(180deg, #10b981, #059669);
+    background: var(--success);
+    width: 60px;
+    /* Top bar accent */
+    height: 4px;
+    border-radius: 4px;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Floating pill accent */
+
+.expense-card {
+    background: linear-gradient(135deg, rgba(255, 228, 230, 0.5) 0%, rgba(255, 255, 255, 0.8) 100%);
+    /* Rose-100 tint */
+    border: 1px solid rgba(225, 29, 72, 0.1);
 }
 
 .expense-card::before {
-    background: linear-gradient(180deg, #ef4444, #dc2626);
+    background: var(--danger);
+    width: 60px;
+    height: 4px;
+    border-radius: 4px;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.balance-positive {
+    background: #ffffff;
+    border: 1px solid rgba(71, 85, 105, 0.1);
+    /* Slate-600 */
+    box-shadow: var(--shadow-lg);
+    /* Elegant lift */
 }
 
 .balance-positive::before {
-    background: linear-gradient(180deg, #3b82f6, #2563eb);
+    background: var(--primary);
+    width: 60px;
+    height: 4px;
+    border-radius: 4px;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.balance-negative {
+    background: #fff;
+    border: 1px solid rgba(217, 119, 6, 0.1);
 }
 
 .balance-negative::before {
-    background: linear-gradient(180deg, #f59e0b, #d97706);
+    background: var(--warning);
+    width: 60px;
+    height: 4px;
+    border-radius: 4px;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .card-icon {
@@ -99,10 +171,25 @@
 }
 
 .card-value {
-    font-size: 2rem;
+    font-size: 2.25rem;
+    /* Larger */
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1;
+    font-variant-numeric: tabular-nums;
+    /* Monospace numbers */
+    letter-spacing: -0.02em;
+}
+
+/* Highlight Net Balance specifically */
+.summary-card.balance-positive .card-value,
+.summary-card.balance-negative .card-value {
+    font-size: 3rem;
+    /* Very confident */
+    color: var(--primary-dark);
+    text-shadow: none;
+    /* Clean */
+    letter-spacing: -1.5px;
 }
 
 .category-breakdown {
@@ -199,8 +286,25 @@
     color: var(--text-secondary);
 }
 
+.data-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
 .data-table tbody tr:hover {
-    background-color: rgba(99, 102, 241, 0.03);
+    background-color: var(--bg-tertiary);
+    /* Gentle slate-100 */
+    cursor: default;
+    transform: none;
+    /* No movement, just color change */
+}
+
+/* Status colors in table using new vars */
+.text-success {
+    color: var(--success);
+}
+
+.text-danger {
+    color: var(--danger);
 }
 
 .text-right {
@@ -248,37 +352,68 @@
     transition: width 0.3s ease;
 }
 
+/* Amount Owed Card - Visual Alignment with Summary Cards */
+/* Amount Owed Card - Now part of the grid */
 .unpaid-alert {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.3);
+    background: #ffffff;
+    border: 1px solid rgba(79, 70, 229, 0.1);
+    /* Soft Indigo border */
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    /* Reuse text-align center from .summary-card */
+}
+
+.unpaid-alert::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 4px;
+    background: #6366f1;
+    /* Indigo accent */
+    border-radius: 4px;
 }
 
 .alert-icon {
-    font-size: 2.5rem;
+    font-size: 3rem;
+    /* Match card-icon */
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
 }
 
 .alert-content {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .alert-title {
     font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--primary-light);
-    margin-bottom: 0.25rem;
+    /* Match card-label */
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 .alert-amount {
-    font-size: 1.75rem;
+    font-size: 2.25rem;
+    /* Match card-value */
     font-weight: 700;
     color: var(--text-primary);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.alert-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    font-style: italic;
 }
 
 .alert-note {
@@ -368,13 +503,22 @@
     }
 
     .unpaid-alert {
-        flex-direction: column;
-        text-align: center;
-        gap: 1rem;
+        padding: 1rem;
+        /* Match summary-card padding */
+        /* Remove column/center forcing to match summary-card behavior */
     }
 
     .alert-icon {
         font-size: 2rem;
+        /* Match card-icon size on mobile (implied 1.25rem from summary-card but text-size adjusted differently?) */
+        /* Actually summary-card icon becomes 40px/1.25rem line 328. Let's match that. */
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
+        display: flex;
+        /* Ensure centering if using width/height */
+        align-items: center;
+        justify-content: center;
     }
 }
 
