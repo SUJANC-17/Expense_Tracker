@@ -1,13 +1,28 @@
 .navbar {
+    width: 100%;
+    margin: 0;
+    /* Remove margin to flush with top */
+    padding: 0;
+    /* Padding moved to content */
+    background: rgba(248, 250, 252, 0.9);
+    /* Slight transparency */
+    backdrop-filter: blur(10px);
+    /* Glass effect */
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    /* Subtle separator */
+}
+
+.navbar-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 2rem;
-    margin: 1rem auto;
     max-width: 1200px;
-    position: sticky;
-    top: 1rem;
-    z-index: 100;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    width: 100%;
 }
 
 .navbar-brand {

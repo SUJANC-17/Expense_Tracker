@@ -1,44 +1,67 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Color Palette */
-  --primary: #6366f1;
-  --primary-dark: #4f46e5;
-  --primary-light: #818cf8;
-  --secondary: #8b5cf6;
-  --success: #10b981;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --info: #3b82f6;
+  /* Color Palette - Calm Intelligence Theme */
+  --primary: #475569;
+  /* Warm Graphite Blue (Slate-600) */
+  --primary-dark: #334155;
+  /* Slate-700 */
+  --primary-light: #94a3b8;
+  /* Slate-400 */
+  --secondary: #64748b;
+  /* Slate-500 */
 
-  /* Neutral Colors */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
+  /* Muted Intelligent Accents */
+  --success: #65a30d;
+  /* Muted Sage (Lime-600) */
+  --success-bg: #ecfccb;
+  /* Lime-100 */
+  --danger: #e11d48;
+  /* Muted Rose (Rose-600) */
+  --danger-bg: #ffe4e6;
+  /* Rose-100 */
+  --warning: #d97706;
+  /* Amber-600 */
+  --info: #0ea5e9;
+  /* Sky-500 */
+
+  /* Calm Backgrounds (Off-white / Light Blue-Gray) */
+  --bg-primary: #f8fafc;
+  /* Slate-50 */
+  --bg-secondary: #ffffff;
+  /* Pure White */
+  --bg-tertiary: #f1f5f9;
+  /* Slate-100 */
+  --text-primary: #1e293b;
+  /* Slate-800 (Soft Dark) */
+  --text-secondary: #64748b;
+  /* Slate-500 */
   --text-muted: #94a3b8;
+  /* Slate-400 */
 
-  /* Glassmorphism */
-  --glass-bg: rgba(30, 41, 59, 0.7);
-  --glass-border: rgba(148, 163, 184, 0.1);
+  /* Frosted Panel - Semi-solid */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.2) 100%);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  /* Shadows - Layered & Soft */
+  --shadow-sm: 0 1px 2px rgba(148, 163, 184, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(148, 163, 184, 0.1), 0 2px 4px -1px rgba(148, 163, 184, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(148, 163, 184, 0.1), 0 4px 6px -2px rgba(148, 163, 184, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(148, 163, 184, 0.1), 0 10px 10px -5px rgba(148, 163, 184, 0.04);
+  --shadow-float: 0 15px 35px -5px rgba(148, 163, 184, 0.15);
+  /* Floating effect */
 
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* Border Radius - Confident & Rounded */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
 
   /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 150ms ease-out;
+  --transition-base: 250ms ease-out;
+  --transition-slow: 400ms ease-out;
 }
 
 * {
@@ -49,11 +72,13 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: var(--bg-primary);
+  background-image: linear-gradient(150deg, #f1f5f9 0%, #e2e8f0 100%);
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
+  /* Airy feel */
 }
 
 /* Scrollbar Styling */
@@ -76,19 +101,37 @@ body {
 }
 
 /* Glass Card */
+/* Glass Card - Enhanced */
+/* Glass Card - Frosted Panel */
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
   transition: transform var(--transition-base), box-shadow var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Eliminate harsh inner shine, use soft top highlight */
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  opacity: 0.5;
 }
 
 .glass-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-float);
+  /* Lift effect */
 }
 
 /* Buttons */
