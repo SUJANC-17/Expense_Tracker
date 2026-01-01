@@ -3,15 +3,39 @@ import type { AuthRequest } from '../middleware/auth.js';
 import pool from '../config/db.js';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { getUserTableName } from '../utils/tableUtils.js';
+import { createUserTables } from '../models/userSchema.js';
+
+// Helper to handle table creation on error
+const executeWithTableRetry = async <T>(
+    uid: string,
+    operation: () => Promise<T>
+): Promise<T> => {
+    try {
+        return await operation();
+    } catch (error: any) {
+        // Error 1146: Table doesn't exist
+        if (error.code === 'ER_NO_SUCH_TABLE' || (error.errno === 1146)) {
+            console.log(`Table missing for user ${uid}, attempting to create...`);
+            await createUserTables(uid);
+            return await operation();
+        }
+        throw error;
+    }
+};
 
 // Get all incomes for user
 export const getIncomes = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
-        const [rows] = await pool.query<RowDataPacket[]>(
-            `SELECT * FROM \`${tableName}\` ORDER BY date DESC`
-        );
+
+        const rows = await executeWithTableRetry(uid, async () => {
+            const [r] = await pool.query<RowDataPacket[]>(
+                `SELECT * FROM \`${tableName}\` ORDER BY date DESC`
+            );
+            return r;
+        });
+
         res.json(rows);
     } catch (error) {
         console.error('Error fetching incomes:', error);
@@ -31,10 +55,15 @@ export const addIncome = async (req: AuthRequest, res: Response): Promise<void> 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
-        const [result] = await pool.query<ResultSetHeader>(
-            `INSERT INTO \`${tableName}\` (amount, source, description, date) VALUES (?, ?, ?, ?)`,
-            [amount, source, description || null, date]
-        );
+
+        const result = await executeWithTableRetry(uid, async () => {
+            const [r] = await pool.query<ResultSetHeader>(
+                `INSERT INTO \`${tableName}\` (amount, source, description, date) VALUES (?, ?, ?, ?)`,
+                [amount, source, description || null, date]
+            );
+            return r;
+        });
+
         res.status(201).json({ id: result.insertId, message: 'Income added successfully' });
     } catch (error) {
         console.error('Error adding income:', error);

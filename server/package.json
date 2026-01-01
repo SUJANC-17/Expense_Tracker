@@ -28,6 +28,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "firebase-admin": "^13.0.3",
+    "http-proxy-middleware": "^3.0.5",
     "mysql2": "^3.16.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.17",

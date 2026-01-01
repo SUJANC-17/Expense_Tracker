@@ -62,8 +62,13 @@ app.post('/api/reports/generate', authenticateToken, async (req: AuthRequest, re
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+try {
+    const server = app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+    server.on('error', (e) => console.error('Server error:', e));
+} catch (e) {
+    console.error('Failed to start server:', e);
+}
 
 export default app;
