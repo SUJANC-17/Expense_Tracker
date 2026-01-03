@@ -1,0 +1,207 @@
+import { useState } from "react";
+import { useAuth } from "./hooks/useAuth";
+import { useData } from "./hooks/useData";
+import { AuthForm } from "./components/AuthForm";
+import { Dashboard } from "./components/Dashboard";
+import { IncomeManager } from "./components/IncomeManager";
+import { ExpenseManager } from "./components/ExpenseManager";
+import { SplitManager } from "./components/SplitManager";
+import { FriendsManager } from "./components/FriendsManager";
+import { Reports } from "./components/Reports";
+import { Button } from "./components/ui/button";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "./components/ui/tabs";
+import {
+    LayoutDashboard,
+    TrendingUp,
+    TrendingDown,
+    Users,
+    FileText,
+    UserPlus,
+    LogOut,
+} from "lucide-react";
+
+type TabValue =
+    | "dashboard"
+    | "income"
+    | "expenses"
+    | "splits"
+    | "reports";
+
+export default function UserApp() {
+    console.log("UserApp component initializing...");
+    const { user, loading, loginWithGoogle, logout } = useAuth();
+    console.log("Auth state:", { user: !!user, loading });
+
+    const {
+        incomes,
+        expenses,
+        splits,
+        friends,
+        loading: dataLoading,
+        addIncome,
+        updateIncome,
+        deleteIncome,
+        addExpense,
+        updateExpense,
+        deleteExpense,
+        addSplit,
+        addSplitBulk,
+        updateSplit,
+        deleteSplit,
+        markSplitPaid,
+        addFriend,
+        deleteFriend,
+    } = useData(user?.id);
+
+    const [activeTab, setActiveTab] = useState<TabValue>("dashboard");
+
+    if (loading || dataLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                <div className="text-white">Loading...</div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <AuthForm onLoginWithGoogle={loginWithGoogle} />;
+    }
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+            <div className="container mx-auto p-4 md:p-8">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-white mb-1">Expense Tracker</h1>
+                        <p className="text-gray-400">{user.email}</p>
+                    </div>
+                    <Button
+                        onClick={logout}
+                        variant="default"
+                        className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+                    >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Logout
+                    </Button>
+                </div>
+
+                <Tabs
+                    value={activeTab}
+                    onValueChange={(value) =>
+                        setActiveTab(value as TabValue)
+                    }
+                    className="w-full"
+                >
+                    <TabsList className="grid w-full grid-cols-6 mb-8 bg-white/10 backdrop-blur-xl border border-white/20">
+                        <TabsTrigger
+                            value="dashboard"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <LayoutDashboard className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">
+                                Dashboard
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="income"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <TrendingUp className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Income</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="expenses"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <TrendingDown className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Expenses</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="splits"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <Users className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Splits</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="friends"
+                            className="data-[state=active]:bg-white/10 text-gray-400 data-[state=active]:text-white"
+                        >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Friends</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="reports"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Reports</span>
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="dashboard">
+                        <Dashboard
+                            incomes={incomes}
+                            expenses={expenses}
+                            splits={splits}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="income">
+                        <IncomeManager
+                            incomes={incomes}
+                            userId={user.id}
+                            onAdd={addIncome}
+                            onUpdate={updateIncome}
+                            onDelete={deleteIncome}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="expenses">
+                        <ExpenseManager
+                            expenses={expenses}
+                            userId={user.id}
+                            onAdd={addExpense}
+                            onUpdate={updateExpense}
+                            onDelete={deleteExpense}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="splits">
+                        <SplitManager
+                            splits={splits}
+                            userId={user.id}
+                            onAdd={addSplit}
+                            onAddBulk={addSplitBulk}
+                            onUpdate={updateSplit}
+                            onDelete={deleteSplit}
+                            onMarkPaid={markSplitPaid}
+                            friends={friends}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="friends">
+                        <FriendsManager
+                            friends={friends}
+                            onAdd={addFriend}
+                            onDelete={deleteFriend}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="reports">
+                        <Reports
+                            incomes={incomes}
+                            expenses={expenses}
+                            splits={splits}
+                        />
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </div>
+    );
+}

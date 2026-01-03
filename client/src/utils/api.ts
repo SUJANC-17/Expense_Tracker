@@ -1,9 +1,23 @@
+import { auth } from '../config/firebase';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const getAuthToken = async (): Promise<string | null> => {
-    const user = (await import('firebase/auth')).getAuth().currentUser;
-    if (!user) return null;
-    return await user.getIdToken();
+    if (auth.currentUser) return auth.currentUser.getIdToken();
+
+    return new Promise((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            unsubscribe();
+            if (user) {
+                const token = await user.getIdToken();
+                console.log(`[API] Resolved user ${user.email}, Token: Yes`);
+                resolve(token);
+            } else {
+                console.warn('[API] Auth resolved: No user logged in');
+                resolve(null);
+            }
+        });
+    });
 };
 
 export const apiClient = {

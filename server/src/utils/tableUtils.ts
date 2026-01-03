@@ -1,10 +1,12 @@
+import crypto from 'crypto';
+
 /**
  * Sanitizes Firebase UID for use in SQL table names.
- * Table names should typically contain only alphanumeric characters and underscores.
- * Firebase UIDs can contain hyphens, which are not allowed in unquoted table names in some SQL dialects.
+ * Uses SHA-256 hash to ensure uniqueness and case-insensitivity safety.
  */
 export const sanitizeUid = (uid: string): string => {
-    return uid.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    // Create a hash of the UID to ensure it is unique and safe for table names (case insensitive)
+    return crypto.createHash('sha256').update(uid).digest('hex').substring(0, 16);
 };
 
 /**

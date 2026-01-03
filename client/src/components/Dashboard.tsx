@@ -1,300 +1,162 @@
-import React, { useEffect, useState } from 'react';
-import { apiClient } from '../utils/api';
-import './Dashboard.css';
+import { useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import type { Income, Expense, Split } from '../appTypes';
+import { getCategoryName } from '../utils/categories';
+import { DollarSign, TrendingUp, TrendingDown, Users } from 'lucide-react';
 
-interface CategoryTotal {
-    category: string;
-    total: number;
+interface DashboardProps {
+  incomes: Income[];
+  expenses: Expense[];
+  splits: Split[];
 }
 
-interface Summary {
-    year: number;
-    month: number;
-    total_income: number;
-    total_expense: number;
-    balance: number;
-    all_time_balance: number;
-    expenses_by_category: CategoryTotal[];
-    total_unpaid_splits: number;
-    incomes?: Array<{ id: number; amount: number; source: string; description: string; date: string }>;
-    expenses?: Array<{ id: number; amount: number; category: string; description: string; date: string }>;
-    splits?: Array<{ id: number; friend_name: string; amount: number; description: string; date: string; is_paid: boolean }>;
-}
+export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
 
-const Dashboard: React.FC = () => {
-    const [summary, setSummary] = useState<Summary | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
-    const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const summary = useMemo(() => {
+    const currentIncomes = incomes.filter(i => {
+      const date = new Date(i.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
 
-    useEffect(() => {
-        fetchSummary(viewMonth, viewYear);
+    const currentExpenses = expenses.filter(e => {
+      const date = new Date(e.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
 
-        // Listen for split creation events to refresh dashboard
-        const handleSplitCreated = () => {
-            fetchSummary(viewMonth, viewYear);
-        };
+    const totalIncome = currentIncomes.reduce((sum, i) => sum + i.amount, 0);
+    const totalExpenses = currentExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const balance = totalIncome - totalExpenses;
 
-        window.addEventListener('splitCreated', handleSplitCreated);
+    const expensesByCategory = currentExpenses.reduce((acc, expense) => {
+      const categoryName = getCategoryName(expense.categoryId);
+      acc[categoryName] = (acc[categoryName] || 0) + expense.amount;
+      return acc;
+    }, {} as Record<string, number>);
 
-        return () => {
-            window.removeEventListener('splitCreated', handleSplitCreated);
-        };
-    }, [viewMonth, viewYear]);
+    const unpaidSplits = splits.filter(s => !s.isPaid);
+    const totalUnpaid = unpaidSplits.reduce((sum, s) => sum + s.amount, 0);
 
-    const fetchSummary = async (month: number, year: number) => {
-        setLoading(true);
-        try {
-            console.log(`Fetching detailed dashboard summary for ${month}/${year}...`);
-            const data = await apiClient.get(`/summary/detailed?year=${year}&month=${month}`);
-            const currentData = await apiClient.get('/summary/current');
-
-            setSummary({
-                ...data,
-                total_unpaid_splits: currentData.total_unpaid_splits
-            });
-        } catch (error) {
-            console.error('Error fetching summary:', error);
-            setSummary({
-                year,
-                month,
-                total_income: 0,
-                total_expense: 0,
-                balance: 0,
-                all_time_balance: 0,
-                expenses_by_category: [],
-                total_unpaid_splits: 0
-            });
-        } finally {
-            setLoading(false);
-        }
+    return {
+      totalIncome,
+      totalExpenses,
+      balance,
+      expensesByCategory,
+      unpaidSplits,
+      totalUnpaid,
     };
+  }, [incomes, expenses, splits, currentMonth, currentYear]);
 
+  const monthName = new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' });
 
-    if (loading) {
-        return (
-            <div className="dashboard">
-                <div className="spinner"></div>
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-white mb-2">Dashboard - {monthName} {currentYear}</h2>
+        <p className="text-gray-400">Overview of your current month finances</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm text-gray-300">Balance</CardTitle>
+            <DollarSign className="h-4 w-4 text-purple-400" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl ${summary.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              ₹{summary.balance.toFixed(2)}
             </div>
-        );
-    }
+            <p className="text-xs text-gray-400 mt-1">
+              {summary.balance >= 0 ? 'Surplus' : 'Deficit'}
+            </p>
+          </CardContent>
+        </Card>
 
-    if (!summary) {
-        return (
-            <div className="dashboard">
-                <div className="dashboard-header">
-                    <h1 className="page-title">Dashboard</h1>
-                    <p className="page-subtitle">Unable to load data</p>
-                </div>
-                <div className="summary-cards">
-                    <div className="summary-card glass-card">
-                        <p>Please check your connection and try refreshing the page.</p>
-                    </div>
-                </div>
+        <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm text-gray-300">Income</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl text-green-400">
+              ₹{summary.totalIncome.toFixed(2)}
             </div>
-        );
-    }
+            <p className="text-xs text-gray-400 mt-1">
+              This month
+            </p>
+          </CardContent>
+        </Card>
 
-    const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
-
-    return (
-        <div className="dashboard">
-            <div className="dashboard-header">
-                <div className="title-section">
-                    <h1 className="page-title">Dashboard</h1>
-                    <p className="page-subtitle">
-                        {monthNames[summary.month - 1]} {summary.year}
-                    </p>
-                </div>
-
-                <div className="report-controls glass-card">
-                    <div className="control-group">
-                        <label className="input-label">View Period</label>
-                        <div className="selector-row">
-                            <select
-                                className="input-field select-sm"
-                                value={viewMonth}
-                                onChange={(e) => setViewMonth(parseInt(e.target.value))}
-                            >
-                                {monthNames.map((name, index) => (
-                                    <option key={name} value={index + 1}>{name}</option>
-                                ))}
-                            </select>
-                            <select
-                                className="input-field select-sm"
-                                value={viewYear}
-                                onChange={(e) => setViewYear(parseInt(e.target.value))}
-                            >
-                                {years.map(year => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                            apiClient.post('/reports/generate', {
-                                year: viewYear,
-                                month: viewMonth
-                            }).then(() => {
-                                alert(`Report for ${monthNames[viewMonth - 1]} ${viewYear} sent to your email!`);
-                            }).catch(() => {
-                                alert('Failed to send report');
-                            });
-                        }}
-                    >
-                        📧 Send PDF Report
-                    </button>
-                </div>
+        <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm text-gray-300">Expenses</CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl text-red-400">
+              ₹{summary.totalExpenses.toFixed(2)}
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              This month
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
-            <div className="summary-cards">
-                <div className="summary-card glass-card income-card">
-                    <div className="card-icon">💰</div>
-                    <div className="card-content">
-                        <h3 className="card-label">Total Income</h3>
-                        <p className="card-value">₹{Number(summary.total_income).toFixed(2)}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+          <CardHeader>
+            <CardTitle className="text-white">Expenses by Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {Object.keys(summary.expensesByCategory).length > 0 ? (
+              <div className="space-y-3">
+                {Object.entries(summary.expensesByCategory)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([category, amount]) => (
+                    <div key={category} className="flex items-center justify-between">
+                      <span className="text-gray-300">{category}</span>
+                      <span className="text-white">₹{amount.toFixed(2)}</span>
                     </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-center py-4">No expenses this month</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-white">Unpaid Split Expenses</CardTitle>
+            <Users className="h-5 w-5 text-orange-400" />
+          </CardHeader>
+          <CardContent>
+            {summary.unpaidSplits.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <span className="text-gray-300">Total Unpaid</span>
+                  <span className="text-orange-400">₹{summary.totalUnpaid.toFixed(2)}</span>
                 </div>
-
-                <div className="summary-card glass-card expense-card">
-                    <div className="card-icon">💸</div>
-                    <div className="card-content">
-                        <h3 className="card-label">Total Expense</h3>
-                        <p className="card-value">₹{Number(summary.total_expense).toFixed(2)}</p>
-                    </div>
-                </div>
-
-                <div className={`summary-card glass-card ${summary.all_time_balance >= 0 ? 'balance-positive' : 'balance-negative'}`}>
-                    <div className="card-icon">{summary.all_time_balance >= 0 ? '👑' : '📉'}</div>
-                    <div className="card-content">
-                        <h3 className="card-label">Lifetime Balance</h3>
-                        <p className="card-value">₹{Number(summary.all_time_balance).toFixed(2)}</p>
-                    </div>
-                </div>
-
-                <div className={`summary-card glass-card ${summary.balance >= 0 ? 'balance-positive' : 'balance-negative'}`}>
-                    <div className="card-icon">{summary.balance >= 0 ? '📅' : '📉'}</div>
-                    <div className="card-content">
-                        <h3 className="card-label">Monthly Balance</h3>
-                        <p className="card-value">₹{Number(summary.balance).toFixed(2)}</p>
-                    </div>
-                </div>
-
-                <div className="summary-card glass-card unpaid-alert" aria-label="Amount Owed to You">
-                    <div className="card-icon">⏳</div>
-                    <div className="card-content">
-                        <h3 className="card-label">Amount Owed</h3>
-                        <p className="card-value">₹{Number(summary.total_unpaid_splits).toFixed(2)}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="dashboard-grid">
-                <div className="grid-left">
-                    {/* Transaction Details - Hidden for December */}
-                    {summary.month !== 12 && (
-                        <div className="details-section">
-                            <h2 className="section-title">Detailed Transactions for {monthNames[summary.month - 1]}</h2>
-
-                            {summary.expenses && summary.expenses.length > 0 && (
-                                <div className="table-wrapper glass-card">
-                                    <h3 className="table-subtitle">Expenses</h3>
-                                    <div className="table-container">
-                                        <table className="data-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Category</th>
-                                                    <th>Description</th>
-                                                    <th>Date</th>
-                                                    <th className="text-right">Amount</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {summary.expenses.map(e => (
-                                                    <tr key={e.id}>
-                                                        <td><span className="badge">{e.category}</span></td>
-                                                        <td>{e.description}</td>
-                                                        <td>{new Date(e.date).toLocaleDateString()}</td>
-                                                        <td className="text-right text-danger">-₹{Number(e.amount).toFixed(2)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {summary.incomes && summary.incomes.length > 0 && (
-                                <div className="table-wrapper glass-card">
-                                    <h3 className="table-subtitle text-success">Incomes</h3>
-                                    <div className="table-container">
-                                        <table className="data-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Source</th>
-                                                    <th>Description</th>
-                                                    <th>Date</th>
-                                                    <th className="text-right">Amount</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {summary.incomes.map(i => (
-                                                    <tr key={i.id}>
-                                                        <td>{i.source}</td>
-                                                        <td>{i.description}</td>
-                                                        <td>{new Date(i.date).toLocaleDateString()}</td>
-                                                        <td className="text-right text-success">+₹{Number(i.amount).toFixed(2)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <div className="grid-right">
-                    {/* Category Breakdown */}
-                    {Array.isArray(summary.expenses_by_category) && summary.expenses_by_category.length > 0 && (
-                        <div className="category-breakdown glass-card">
-                            <h2 className="section-title">Expenses by Category</h2>
-                            <div className="category-list">
-                                {summary.expenses_by_category.map((cat, index) => (
-                                    <div key={index} className="category-item">
-                                        <div className="category-info">
-                                            <span className="category-name">{cat.category}</span>
-                                            <div className="category-progress-bg">
-                                                <div
-                                                    className="category-progress-fill"
-                                                    style={{ width: `${(cat.total / summary.total_expense) * 100}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                        <span className="category-amount">₹{Number(cat.total).toFixed(2)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {summary.total_unpaid_splits > 0 && (
-                        /* Removed from here, moved to summary-cards */
-                        null
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default Dashboard;
+                {summary.unpaidSplits.slice(0, 3).map((split) => (
+                  <div key={split.id} className="flex items-center justify-between">
+                    <span className="text-gray-300">{split.friendName}</span>
+                    <span className="text-white">₹{split.amount.toFixed(2)}</span>
+                  </div>
+                ))}
+                {summary.unpaidSplits.length > 3 && (
+                  <p className="text-gray-400 text-sm text-center pt-2">
+                    +{summary.unpaidSplits.length - 3} more
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-center py-4">All splits are paid! 🎉</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
