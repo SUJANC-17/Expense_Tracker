@@ -7,9 +7,17 @@ export const initializeDatabase = async (): Promise<void> => {
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
+        last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add last_active_at if it doesn't exist (for existing databases)
+    try {
+      await pool.query('ALTER TABLE users ADD COLUMN last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    } catch (e) {
+      // Column probably already exists
+    }
 
     // Create categories table
     await pool.query(`

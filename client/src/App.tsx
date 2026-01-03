@@ -1,88 +1,29 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Auth from './components/Auth';
-import Dashboard from './components/Dashboard';
-import Income from './components/Income';
-import Expenses from './components/Expenses';
-import Splits from './components/Splits';
-import Friends from './components/Friends';
-import Navbar from './components/Navbar';
-import './index.css';
+import { useState, useEffect } from "react";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import UserApp from "./UserApp";
 
-const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
+export default function App() {
+  // Simple router check - does not use hooks that trigger auth/data fetching!
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  if (loading) {
-    return <div className="spinner"></div>;
+  useEffect(() => {
+    const checkAdmin = () => {
+      // Check query param or path
+      const isAdminParam = window.location.search.includes('admin=true');
+      const isAdminPath = window.location.pathname.startsWith('/admin');
+
+      console.log("[App Dispatcher] Checking mode:", { isAdminParam, isAdminPath });
+      setIsAdmin(isAdminParam || isAdminPath);
+    };
+
+    checkAdmin();
+    // Optional: add listener for popstate if we were using pushState, 
+    // but here we mostly rely on initial load or reloads.
+  }, []);
+
+  if (isAdmin) {
+    return <AdminDashboard />;
   }
 
-  return user ? <>{children}</> : <Navigate to="/login" />;
-};
-
-const AppContent: React.FC = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div className="spinner"></div>;
-  }
-
-  return (
-    <Router>
-      {user && <Navbar />}
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Auth />} />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/income"
-          element={
-            <PrivateRoute>
-              <Income />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/expenses"
-          element={
-            <PrivateRoute>
-              <Expenses />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/splits"
-          element={
-            <PrivateRoute>
-              <Splits />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/friends"
-          element={
-            <PrivateRoute>
-              <Friends />
-            </PrivateRoute>
-          }
-        />
-      </Routes>
-    </Router>
-  );
-};
-
-function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  return <UserApp />;
 }
-
-export default App;

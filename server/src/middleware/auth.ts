@@ -15,9 +15,11 @@ export const authenticateToken = async (
     next: NextFunction
 ): Promise<void> => {
     const authHeader = req.headers.authorization;
+    console.log(`[Auth] Request to ${req.path} - Header Present: ${!!authHeader}`);
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
+        console.warn('[Auth] No token provided');
         res.status(401).json({ error: 'Access token required' });
         return;
     }

@@ -10,10 +10,16 @@ app.use(cors());
 
 // Proxy API requests to Backend
 app.use('/api', createProxyMiddleware({
-    target: 'http://localhost:5000/api',
+    target: 'http://127.0.0.1:5000',
     changeOrigin: true,
+    pathRewrite: { '^/': '/api/' },
     ws: true,
-    logLevel: 'debug'
+    logLevel: 'debug',
+    onProxyReq: (proxyReq, req, res) => {
+        console.log(`[Proxy] ${req.method} ${req.url} -> ${proxyReq.path}`);
+        console.log(`[Proxy] Auth Header Client -> Proxy: ${!!req.headers.authorization}`);
+        // proxyReq.setHeader('x-added', 'foobar'); // Example
+    }
 }));
 
 // Proxy all other requests to Frontend

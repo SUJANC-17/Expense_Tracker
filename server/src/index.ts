@@ -10,6 +10,8 @@ import expenseRoutes from './routes/expense.js';
 import splitRoutes from './routes/split.js';
 import summaryRoutes from './routes/summary.js';
 import friendRoutes from './routes/friend.js';
+import adminRoutes from './routes/admin.js';
+import reportsRoutes from './routes/reports.js';
 import { authenticateToken } from './middleware/auth.js';
 import type { AuthRequest } from './middleware/auth.js';
 
@@ -42,6 +44,8 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/splits', splitRoutes);
 app.use('/api/summary', summaryRoutes);
 app.use('/api/friends', friendRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Manual report generation endpoint
 app.post('/api/reports/generate', authenticateToken, async (req: AuthRequest, res: Response) => {
