@@ -1,17 +1,16 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
-import pool from '../config/db.js';
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import db from '../config/db.js';
 import { getUserTableName } from '../utils/tableUtils.js';
 
 // Get all friends for user
-export const getFriends = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getFriends = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'friends');
-        const [rows] = await pool.query<RowDataPacket[]>(
+        const rows = db.prepare(
             `SELECT * FROM \`${tableName}\` ORDER BY name ASC`
-        );
+        ).all();
         res.json(rows);
     } catch (error) {
         console.error('Error fetching friends:', error);
@@ -20,7 +19,7 @@ export const getFriends = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // Add a new friend
-export const addFriend = async (req: AuthRequest, res: Response): Promise<void> => {
+export const addFriend = (req: AuthRequest, res: Response): void => {
     const { name } = req.body;
 
     if (!name) {
@@ -31,13 +30,12 @@ export const addFriend = async (req: AuthRequest, res: Response): Promise<void> 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'friends');
-        const [result] = await pool.query<ResultSetHeader>(
-            `INSERT INTO \`${tableName}\` (name) VALUES (?)`,
-            [name]
-        );
-        res.status(201).json({ id: result.insertId, name, message: 'Friend added successfully' });
+        const result = db.prepare(
+            `INSERT INTO \`${tableName}\` (name) VALUES (?)`
+        ).run(name);
+        res.status(201).json({ id: Number(result.lastInsertRowid), name, message: 'Friend added successfully' });
     } catch (error: any) {
-        if (error.code === 'ER_DUP_ENTRY') {
+        if (error.message.includes('UNIQUE constraint failed')) {
             res.status(400).json({ error: 'Friend already exists' });
             return;
         }
@@ -47,31 +45,28 @@ export const addFriend = async (req: AuthRequest, res: Response): Promise<void> 
 };
 
 // Delete a friend
-export const deleteFriend = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteFriend = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'friends');
 
-        // Prevent deleting 'Myself' if needed, or just let it happen. 
-        // Better to prevent it.
-        const [friend] = await pool.query<RowDataPacket[]>(
-            `SELECT name FROM \`${tableName}\` WHERE id = ?`,
-            [id]
-        );
+        // Prevent deleting 'Myself'
+        const friend = db.prepare(
+            `SELECT name FROM \`${tableName}\` WHERE id = ?`
+        ).get(id) as any;
 
-        if (friend && friend[0] && friend[0].name === 'Myself') {
+        if (friend && friend.name === 'Myself') {
             res.status(403).json({ error: 'Cannot delete the "Myself" profile' });
             return;
         }
 
-        const [result] = await pool.query<ResultSetHeader>(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`,
-            [id]
-        );
+        const result = db.prepare(
+            `DELETE FROM \`${tableName}\` WHERE id = ?`
+        ).run(id);
 
-        if (result.affectedRows === 0) {
+        if (result.changes === 0) {
             res.status(404).json({ error: 'Friend not found' });
             return;
         }

@@ -1,29 +1,32 @@
-
-import mysql from 'mysql2/promise';
+import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
 
-const config = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'expense_tracker',
-    port: parseInt(process.env.DB_PORT || '3306'),
-};
+const dbPath = process.env.DB_PATH || './data/expense_tracker.db';
+const absolutePath = path.resolve(__dirname, dbPath);
 
-console.log('Attempting to connect with:', { ...config, password: '****' });
+console.log('Attempting to connect to SQLite at:', absolutePath);
 
-async function test() {
+// Ensure directory exists
+const dir = path.dirname(absolutePath);
+if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+}
+
+function test() {
     try {
-        const connection = await mysql.createConnection(config);
-        console.log('SUCCESS: Connected to MySQL!');
-        await connection.end();
+        const db = new Database(absolutePath);
+        console.log('SUCCESS: Connected to SQLite!');
+        const row = db.prepare('SELECT 1 as result').get();
+        console.log('Query result:', row.result);
+        db.close();
     } catch (err) {
-        console.error('FAILURE: Could not connect to MySQL:', err.message);
+        console.error('FAILURE: Could not connect to SQLite:', err.message);
     }
 }
 

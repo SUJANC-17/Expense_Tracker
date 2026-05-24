@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Income, Expense, Split, Friend } from '../appTypes';
 import { apiClient } from '../utils/api';
 
@@ -9,21 +9,8 @@ export const useData = (userId: string | undefined) => {
     const [friends, setFriends] = useState<Friend[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch all data when userId changes
-    useEffect(() => {
-        if (userId) {
-            fetchAllData();
-        } else {
-            // Clear sensitive data on logout AND set loading to false
-            setIncomes([]);
-            setExpenses([]);
-            setSplits([]);
-            setFriends([]);
-            setLoading(false);
-        }
-    }, [userId]);
-
-    const fetchAllData = async () => {
+    // Fetch all data function - defined before useEffect to avoid lint errors
+    const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
             const [incomesData, expensesData, splitsData, friendsData] = await Promise.all([
@@ -39,13 +26,27 @@ export const useData = (userId: string | undefined) => {
             setFriends(friendsData);
         } catch (error) {
             console.error('CRITICAL: Error fetching all data:', error);
-            // @ts-ignore
-            alert(`Database Connection Error: ${error.message || 'Unknown error'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Database Connection Error: ${errorMessage}`);
         } finally {
             console.log('Data fetch attempt completed.');
             setLoading(false);
         }
-    };
+    }, []);
+
+    // Fetch all data when userId changes
+    useEffect(() => {
+        if (userId) {
+            fetchAllData();
+        } else {
+            // Clear sensitive data on logout AND set loading to false
+            setIncomes([]);
+            setExpenses([]);
+            setSplits([]);
+            setFriends([]);
+            setLoading(false);
+        }
+    }, [userId, fetchAllData]);
 
     // Income methods
     const addIncome = async (income: Omit<Income, 'id'>) => {

@@ -339,6 +339,7 @@ export default function AdminDashboard() {
                                     // Apply filters
                                     let filteredRows = selectedTableData.rows;
 
+                                    // Client-side filtering only - safe from SQL injection
                                     // Category filter
                                     if (categoryFilter && selectedTableData.tableName.includes('expenses')) {
                                         filteredRows = filteredRows.filter(row =>

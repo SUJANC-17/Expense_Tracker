@@ -1,39 +1,36 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
-import pool from '../config/db.js';
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import db from '../config/db.js';
 import { getUserTableName } from '../utils/tableUtils.js';
 import { createUserTables } from '../models/userSchema.js';
 
 // Helper to handle table creation on error
-const executeWithTableRetry = async <T>(
+const executeWithTableRetry = <T>(
     uid: string,
-    operation: () => Promise<T>
-): Promise<T> => {
+    operation: () => T
+): T => {
     try {
-        return await operation();
+        return operation();
     } catch (error: any) {
-        // Error 1146: Table doesn't exist
-        if (error.code === 'ER_NO_SUCH_TABLE' || (error.errno === 1146)) {
+        if (error.message.includes('no such table')) {
             console.log(`Table missing for user ${uid}, attempting to create...`);
-            await createUserTables(uid);
-            return await operation();
+            createUserTables(uid);
+            return operation();
         }
         throw error;
     }
 };
 
 // Get all incomes for user
-export const getIncomes = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getIncomes = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
 
-        const rows = await executeWithTableRetry(uid, async () => {
-            const [r] = await pool.query<RowDataPacket[]>(
+        const rows = executeWithTableRetry(uid, () => {
+            return db.prepare(
                 `SELECT * FROM \`${tableName}\` ORDER BY date DESC`
-            );
-            return r;
+            ).all();
         });
 
         res.json(rows);
@@ -44,7 +41,7 @@ export const getIncomes = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // Add new income
-export const addIncome = async (req: AuthRequest, res: Response): Promise<void> => {
+export const addIncome = (req: AuthRequest, res: Response): void => {
     const { amount, source, description, date } = req.body;
 
     if ((amount === undefined || amount === null || amount === '') || !source || !date) {
@@ -56,15 +53,20 @@ export const addIncome = async (req: AuthRequest, res: Response): Promise<void> 
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
 
-        const result = await executeWithTableRetry(uid, async () => {
-            const [r] = await pool.query<ResultSetHeader>(
-                `INSERT INTO \`${tableName}\` (amount, source, description, date) VALUES (?, ?, ?, ?)`,
-                [amount, source, description || null, date]
-            );
-            return r;
+        const result = executeWithTableRetry(uid, () => {
+            return db.prepare(
+                `INSERT INTO \`${tableName}\` (amount, source, description, date) VALUES (?, ?, ?, ?)`
+            ).run(amount, source, description || null, date);
         });
 
-        res.status(201).json({ id: result.insertId, message: 'Income added successfully' });
+        res.status(201).json({
+            id: Number(result.lastInsertRowid),
+            amount: parseFloat(amount),
+            source,
+            description: description || null,
+            date,
+            message: 'Income added successfully'
+        });
     } catch (error) {
         console.error('Error adding income:', error);
         res.status(500).json({ error: 'Failed to add income' });
@@ -72,19 +74,18 @@ export const addIncome = async (req: AuthRequest, res: Response): Promise<void> 
 };
 
 // Update income
-export const updateIncome = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateIncome = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
     const { amount, source, description, date } = req.body;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
-        const [result] = await pool.query<ResultSetHeader>(
-            `UPDATE \`${tableName}\` SET amount = ?, source = ?, description = ?, date = ? WHERE id = ?`,
-            [amount, source, description, date, id]
-        );
+        const result = db.prepare(
+            `UPDATE \`${tableName}\` SET amount = ?, source = ?, description = ?, date = ? WHERE id = ?`
+        ).run(amount, source, description, date, id);
 
-        if (result.affectedRows === 0) {
+        if (result.changes === 0) {
             res.status(404).json({ error: 'Income not found' });
             return;
         }
@@ -97,18 +98,17 @@ export const updateIncome = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // Delete income
-export const deleteIncome = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteIncome = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'incomes');
-        const [result] = await pool.query<ResultSetHeader>(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`,
-            [id]
-        );
+        const result = db.prepare(
+            `DELETE FROM \`${tableName}\` WHERE id = ?`
+        ).run(id);
 
-        if (result.affectedRows === 0) {
+        if (result.changes === 0) {
             res.status(404).json({ error: 'Income not found' });
             return;
         }

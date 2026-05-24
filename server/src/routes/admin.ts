@@ -1,10 +1,9 @@
 import express from 'express';
-import pool from '../config/db.js';
+import db from '../config/db.js';
 import jwt from 'jsonwebtoken';
 import { processUserCleanup } from '../services/cleanupService.js';
 import { getUserTableName } from '../utils/tableUtils.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
-import type { RowDataPacket } from 'mysql2/promise';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
@@ -21,10 +20,10 @@ router.post('/login', (req, res) => {
     }
 });
 
-// Admin-accessible categories endpoint (before auth middleware)
-router.get('/categories', async (req, res) => {
+// Admin-accessible categories endpoint
+router.get('/categories', (req, res) => {
     try {
-        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM categories ORDER BY name');
+        const rows = db.prepare('SELECT * FROM categories ORDER BY name').all();
         res.json(rows);
     } catch (error) {
         console.error('Error fetching categories:', error);
@@ -36,9 +35,9 @@ router.get('/categories', async (req, res) => {
 router.use(authenticateAdmin);
 
 // List all users
-router.get('/users', async (req, res) => {
+router.get('/users', (req, res) => {
     try {
-        const [users] = await pool.query<RowDataPacket[]>('SELECT * FROM users ORDER BY created_at DESC');
+        const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
         res.json(users);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch users' });
@@ -46,12 +45,12 @@ router.get('/users', async (req, res) => {
 });
 
 // List tables for a specific user
-router.get('/users/:uid/tables', async (req, res) => {
+router.get('/users/:uid/tables', (req, res) => {
     const { uid } = req.params;
     try {
         const prefix = getUserTableName(uid, '');
-        const [allTables] = await pool.query<RowDataPacket[]>('SHOW TABLES');
-        const dbTables = (allTables as any[]).map((r: any) => Object.values(r)[0] as string);
+        const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
+        const dbTables = allTables.map(r => r.name);
         const userTables = dbTables.filter((t: string) => t.startsWith(prefix));
         res.json(userTables);
     } catch (error) {
@@ -60,7 +59,7 @@ router.get('/users/:uid/tables', async (req, res) => {
 });
 
 // Get records for a specific table
-router.get('/users/:uid/tables/:tableName/data', async (req, res) => {
+router.get('/users/:uid/tables/:tableName/data', (req, res) => {
     const { uid, tableName } = req.params;
     try {
         const expectedPrefix = getUserTableName(uid, '');
@@ -69,7 +68,7 @@ router.get('/users/:uid/tables/:tableName/data', async (req, res) => {
             return;
         }
 
-        const [rows] = await pool.query<RowDataPacket[]>(`SELECT * FROM \`${tableName}\` LIMIT 100`);
+        const rows = db.prepare(`SELECT * FROM \`${tableName}\` LIMIT 100`).all();
         res.json(rows);
     } catch (error) {
         console.error('Error fetching table data:', error);
@@ -78,23 +77,20 @@ router.get('/users/:uid/tables/:tableName/data', async (req, res) => {
 });
 
 // Delete user (with export + wipe)
-router.delete('/users/:uid', async (req, res) => {
+router.delete('/users/:uid', (req, res) => {
     const { uid } = req.params;
-    const connection = await pool.getConnection();
     try {
-        const [userRows] = await connection.query<RowDataPacket[]>('SELECT email FROM users WHERE id = ?', [uid]);
-        if (userRows && (userRows as any[]).length > 0) {
-            const email = (userRows as any[])[0].email;
-            await processUserCleanup(connection, uid, email);
-            res.json({ message: `User ${email} and all data has been exported and wiped successfully.` });
+        const user = db.prepare('SELECT email FROM users WHERE id = ?').get(uid) as any;
+        if (user) {
+            const email = user.email;
+            processUserCleanup(uid, email);
+            res.json({ message: `User ${email} and all data has been wiped successfully.` });
         } else {
             res.status(404).json({ error: 'User not found' });
         }
     } catch (error) {
         console.error('Admin delete error:', error);
         res.status(500).json({ error: 'Failed to delete user' });
-    } finally {
-        connection.release();
     }
 });
 
