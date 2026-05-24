@@ -1,25 +1,23 @@
 import cron from 'node-cron';
-import pool from '../config/db.js';
+import db from '../config/db.js';
 import { sanitizeUid, getUserTableName } from '../utils/tableUtils.js';
 import { sendInactivityDeletionNotice } from './emailService.js';
-import type { RowDataPacket } from 'mysql2/promise';
 
 export const startCleanupScheduler = () => {
     // Run every day at 03:00 AM
     cron.schedule('0 3 * * *', async () => {
         console.log('Running inactive user cleanup job...');
-        await runCleanup();
+        runCleanup();
     });
 
     console.log('Inactive user cleanup scheduler started (03:00 AM daily).');
 };
 
-export const runCleanup = async () => {
-    const conn = await pool.getConnection();
-
+export const runCleanup = () => {
     try {
         // Find users inactive for more than 30 days
-        const [users] = await conn.query<RowDataPacket[]>('SELECT id, email FROM users WHERE last_active_at < NOW() - INTERVAL 30 DAY');
+        // SQLite: last_active_at < date('now', '-30 days')
+        const users = db.prepare("SELECT id, email FROM users WHERE last_active_at < date('now', '-30 days')").all() as any[];
 
         if (users.length === 0) {
             console.log('No inactive users found.');
@@ -28,16 +26,14 @@ export const runCleanup = async () => {
 
         for (const user of users) {
             console.log(`Processing inactive user: ${user.email} (${user.id})`);
-            await processUserCleanup(conn, user.id, user.email);
+            processUserCleanup(user.id, user.email);
         }
     } catch (error) {
         console.error('Error in cleanup job:', error);
-    } finally {
-        conn.release();
     }
 };
 
-async function getUserFullData(conn: any, uid: string): Promise<any> {
+function getUserFullData(uid: string): any {
     const incomeTable = getUserTableName(uid, 'incomes');
     const expenseTable = getUserTableName(uid, 'expenses');
     const splitTable = getUserTableName(uid, 'splits');
@@ -46,68 +42,63 @@ async function getUserFullData(conn: any, uid: string): Promise<any> {
     const data: any = {};
 
     try {
-        const [rows] = await conn.query(`SELECT * FROM \`${incomeTable}\``);
-        data.incomes = rows;
+        data.incomes = db.prepare(`SELECT * FROM \`${incomeTable}\``).all();
     } catch (e) { data.incomes = []; }
 
     try {
-        const [rows] = await conn.query(`SELECT * FROM \`${expenseTable}\``);
-        data.expenses = rows;
+        data.expenses = db.prepare(`SELECT * FROM \`${expenseTable}\``).all();
     } catch (e) { data.expenses = []; }
 
     try {
-        const [rows] = await conn.query(`SELECT * FROM \`${splitTable}\``);
-        data.splits = rows;
+        data.splits = db.prepare(`SELECT * FROM \`${splitTable}\``).all();
     } catch (e) { data.splits = []; }
 
     try {
-        const [rows] = await conn.query(`SELECT * FROM \`${friendTable}\``);
-        data.friends = rows;
+        data.friends = db.prepare(`SELECT * FROM \`${friendTable}\``).all();
     } catch (e) { data.friends = []; }
 
     return data;
 }
 
-async function deleteUserData(conn: any, uid: string) {
+function deleteUserData(uid: string) {
     try {
-        await conn.beginTransaction();
+        db.transaction(() => {
+            const sUid = sanitizeUid(uid);
+            const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
+            const dbTables = allTables.map(r => r.name);
 
-        const sUid = sanitizeUid(uid);
-        const [allTables] = await conn.query('SHOW TABLES');
-        const dbTables = allTables.map((r: any) => Object.values(r)[0]);
+            const userTables = dbTables.filter((t: string) => t.includes(sUid));
 
-        const userTables = dbTables.filter((t: string) => t.includes(sUid));
-
-        if (userTables.length > 0) {
-            await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-            for (const table of userTables) {
-                await conn.query(`DROP TABLE IF EXISTS \`${table}\``);
-                console.log(`Dropped table: ${table}`);
+            if (userTables.length > 0) {
+                // SQLite doesn't have SET FOREIGN_KEY_CHECKS = 0; it has PRAGMA foreign_keys = OFF;
+                // But DROP TABLE usually doesn't care if it's not a circular dependency.
+                db.pragma('foreign_keys = OFF');
+                for (const table of userTables) {
+                    db.prepare(`DROP TABLE IF EXISTS \`${table}\``).run();
+                    console.log(`Dropped table: ${table}`);
+                }
+                db.pragma('foreign_keys = ON');
             }
-            await conn.query('SET FOREIGN_KEY_CHECKS = 1');
-        }
 
-        await conn.query('DELETE FROM users WHERE id = ?', [uid]);
-        await conn.commit();
+            db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+        })();
     } catch (error) {
-        await conn.rollback();
-        // Ensure we re-enable checks if something fails, though rollback might handle transaction scope
-        try { await conn.query('SET FOREIGN_KEY_CHECKS = 1'); } catch (e) { }
         throw error;
     }
 }
 
-export const processUserCleanup = async (conn: any, uid: string, email: string) => {
+export const processUserCleanup = (uid: string, email: string) => {
     try {
-        const fullData = await getUserFullData(conn, uid);
+        const fullData = getUserFullData(uid);
 
-        try {
-            await sendInactivityDeletionNotice(email, fullData);
-        } catch (emailError) {
+        // email sending is still async, but we don't need to await it for the cleanup flow to continue
+        // unless we want to ensure it's sent before deleting. 
+        // Given this is a background job, we'll fire and forget or wrap in async if needed.
+        sendInactivityDeletionNotice(email, fullData).catch(emailError => {
             console.error(`Failed to send cleanup email to ${email}, proceeding with deletion anyway:`, emailError);
-        }
+        });
 
-        await deleteUserData(conn, uid);
+        deleteUserData(uid);
     } catch (error) {
         console.error(`Error processing cleanup for user ${uid}:`, error);
         throw error;

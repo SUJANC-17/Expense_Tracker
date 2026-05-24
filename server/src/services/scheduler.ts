@@ -1,6 +1,5 @@
 import cron from 'node-cron';
-import pool from '../config/db.js';
-import type { RowDataPacket } from 'mysql2/promise';
+import db from '../config/db.js';
 import { generateMonthlyPDF } from './pdfService.js';
 import { sendMonthlyReport } from './emailService.js';
 import { getUserTableName } from '../utils/tableUtils.js';
@@ -17,7 +16,7 @@ export const startMonthlyReportScheduler = () => {
 
         try {
             // Get all users
-            const [users] = await pool.query<RowDataPacket[]>('SELECT id, email FROM users');
+            const users = db.prepare('SELECT id, email FROM users').all() as any[];
 
             for (const user of users) {
                 try {
@@ -47,91 +46,87 @@ export const generateAndSendReport = async (
     const expenseTable = getUserTableName(userId, 'expenses');
     const splitTable = getUserTableName(userId, 'splits');
 
+    const yearStr = year.toString();
+    const monthStr = month.toString().padStart(2, '0');
+
     // Get total income
-    const [incomeRows] = await pool.query<RowDataPacket[]>(
+    const incomeRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_income 
          FROM \`${incomeTable}\` 
-         WHERE YEAR(date) = ? AND MONTH(date) = ?`,
-        [year, month]
-    );
+         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(yearStr, monthStr) as any;
 
     // Get detailed income records
-    const [incomeDetails] = await pool.query<RowDataPacket[]>(
+    const incomeDetails = db.prepare(
         `SELECT amount, source, description, date 
          FROM \`${incomeTable}\` 
-         WHERE YEAR(date) = ? AND MONTH(date) = ?
-         ORDER BY date DESC`,
-        [year, month]
-    );
+         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?
+         ORDER BY date DESC`
+    ).all(yearStr, monthStr) as any[];
 
     // Get total expenses
-    const [expenseRows] = await pool.query<RowDataPacket[]>(
+    const expenseRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_expense 
          FROM \`${expenseTable}\` 
-         WHERE YEAR(date) = ? AND MONTH(date) = ?`,
-        [year, month]
-    );
+         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(yearStr, monthStr) as any;
 
     // Get detailed expense records
-    const [expenseDetails] = await pool.query<RowDataPacket[]>(
+    const expenseDetails = db.prepare(
         `SELECT e.amount, c.name as category, e.description, e.date 
          FROM \`${expenseTable}\` e 
          JOIN categories c ON e.category_id = c.id 
-         WHERE YEAR(e.date) = ? AND MONTH(e.date) = ?
-         ORDER BY e.date DESC`,
-        [year, month]
-    );
+         WHERE strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?
+         ORDER BY e.date DESC`
+    ).all(yearStr, monthStr) as any[];
 
     // Get expenses by category
-    const [categoryRows] = await pool.query<RowDataPacket[]>(
+    const categoryRows = db.prepare(
         `SELECT c.name as category, COALESCE(SUM(e.amount), 0) as total 
          FROM \`${expenseTable}\` e 
          JOIN categories c ON e.category_id = c.id 
-         WHERE YEAR(e.date) = ? AND MONTH(e.date) = ? 
-         GROUP BY c.name`,
-        [year, month]
-    );
+         WHERE strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ? 
+         GROUP BY c.name`
+    ).all(yearStr, monthStr) as any[];
 
     // Get income from settled splits for the month (Repayments)
-    const [splitIncomeRows] = await pool.query<RowDataPacket[]>(
+    const splitIncomeRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_split_income 
          FROM \`${splitTable}\` 
-         WHERE is_paid = TRUE AND YEAR(paid_at) = ? AND MONTH(paid_at) = ?`,
-        [year, month]
-    );
+         WHERE is_paid = 1 AND strftime('%Y', paid_at) = ? AND strftime('%m', paid_at) = ?`
+    ).get(yearStr, monthStr) as any;
 
     // Get total upfront splits created in the month (Outgoing money)
-    const [splitExpenseRows] = await pool.query<RowDataPacket[]>(
+    const splitExpenseRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_split_expense 
          FROM \`${splitTable}\` 
-         WHERE YEAR(date) = ? AND MONTH(date) = ?`,
-        [year, month]
-    );
+         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(yearStr, monthStr) as any;
 
     // Get unpaid splits total
-    const [unpaidSplitsRows] = await pool.query<RowDataPacket[]>(
+    const unpaidSplitsRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_unpaid 
          FROM \`${splitTable}\` 
-         WHERE is_paid = FALSE`
-    );
+         WHERE is_paid = 0`
+    ).get() as any;
 
     // Get detailed unpaid splits
-    const [unpaidSplitsDetails] = await pool.query<RowDataPacket[]>(
+    const unpaidSplitsDetails = db.prepare(
         `SELECT friend_name, amount, description, date 
          FROM \`${splitTable}\` 
-         WHERE is_paid = FALSE
+         WHERE is_paid = 0
          ORDER BY date DESC`
-    );
+    ).all() as any[];
 
-    const baseIncome = Number(incomeRows[0]?.total_income || 0);
-    const splitRepayments = Number(splitIncomeRows[0]?.total_split_income || 0);
-    const baseExpense = Number(expenseRows[0]?.total_expense || 0);
-    const upfrontSplits = Number(splitExpenseRows[0]?.total_split_expense || 0);
+    const baseIncome = Number(incomeRows?.total_income || 0);
+    const splitRepayments = Number(splitIncomeRows?.total_split_income || 0);
+    const baseExpense = Number(expenseRows?.total_expense || 0);
+    const upfrontSplits = Number(splitExpenseRows?.total_split_expense || 0);
 
     const totalIncome = baseIncome;
     const totalExpense = baseExpense + upfrontSplits;
     const balance = totalIncome - totalExpense + splitRepayments;
-    const totalUnpaid = Number(unpaidSplitsRows[0]?.total_unpaid || 0);
+    const totalUnpaid = Number(unpaidSplitsRows?.total_unpaid || 0);
 
     const reportData = {
         year,

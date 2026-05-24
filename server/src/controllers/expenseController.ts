@@ -1,20 +1,42 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
-import pool from '../config/db.js';
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import db from '../config/db.js';
 import { getUserTableName } from '../utils/tableUtils.js';
+import { createUserTables } from '../models/userSchema.js';
+
+// Helper to handle table creation on error
+const executeWithTableRetry = <T>(
+    uid: string,
+    operation: () => T
+): T => {
+    try {
+        return operation();
+    } catch (error: any) {
+        // SQLite: Table doesn't exist error message usually contains "no such table"
+        if (error.message.includes('no such table')) {
+            console.log(`Table missing for user ${uid}, attempting to create...`);
+            createUserTables(uid);
+            return operation();
+        }
+        throw error;
+    }
+};
 
 // Get all expenses for user
-export const getExpenses = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getExpenses = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
-        const [rows] = await pool.query<RowDataPacket[]>(
-            `SELECT e.*, c.name as category_name 
-             FROM \`${tableName}\` e 
-             JOIN categories c ON e.category_id = c.id 
-             ORDER BY e.date DESC`
-        );
+
+        const rows = executeWithTableRetry(uid, () => {
+            return db.prepare(
+                `SELECT e.*, c.name as category_name 
+                 FROM \`${tableName}\` e 
+                 JOIN categories c ON e.category_id = c.id 
+                 ORDER BY e.date DESC`
+            ).all();
+        });
+
         res.json(rows);
     } catch (error) {
         console.error('Error fetching expenses:', error);
@@ -23,9 +45,9 @@ export const getExpenses = async (req: AuthRequest, res: Response): Promise<void
 };
 
 // Get all categories
-export const getCategories = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getCategories = (req: AuthRequest, res: Response): void => {
     try {
-        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM categories ORDER BY name');
+        const rows = db.prepare('SELECT * FROM categories ORDER BY name').all();
         res.json(rows);
     } catch (error) {
         console.error('Error fetching categories:', error);
@@ -34,7 +56,7 @@ export const getCategories = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 // Add new expense
-export const addExpense = async (req: AuthRequest, res: Response): Promise<void> => {
+export const addExpense = (req: AuthRequest, res: Response): void => {
     const { amount, category_id, description, date } = req.body;
 
     if (amount === undefined || amount === null || amount === '' || !category_id || !date) {
@@ -45,11 +67,22 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
-        const [result] = await pool.query<ResultSetHeader>(
-            `INSERT INTO \`${tableName}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`,
-            [amount, category_id, description || null, date]
-        );
-        res.status(201).json({ id: result.insertId, message: 'Expense added successfully' });
+        
+        const result = db.prepare(
+            `INSERT INTO \`${tableName}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`
+        ).run(amount, category_id, description || null, date);
+
+        const newExpense = db.prepare(
+            `SELECT e.*, c.name as category_name 
+             FROM \`${tableName}\` e 
+             JOIN categories c ON e.category_id = c.id 
+             WHERE e.id = ?`
+        ).get(result.lastInsertRowid);
+
+        res.status(201).json({
+            ...newExpense as object,
+            message: 'Expense added successfully'
+        });
     } catch (error) {
         console.error('Error adding expense:', error);
         res.status(500).json({ error: 'Failed to add expense' });
@@ -57,19 +90,18 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // Update expense
-export const updateExpense = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateExpense = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
     const { amount, category_id, description, date } = req.body;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
-        const [result] = await pool.query<ResultSetHeader>(
-            `UPDATE \`${tableName}\` SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ?`,
-            [amount, category_id, description, date, id]
-        );
+        const result = db.prepare(
+            `UPDATE \`${tableName}\` SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ?`
+        ).run(amount, category_id, description, date, id);
 
-        if (result.affectedRows === 0) {
+        if (result.changes === 0) {
             res.status(404).json({ error: 'Expense not found' });
             return;
         }
@@ -82,18 +114,17 @@ export const updateExpense = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 // Delete expense
-export const deleteExpense = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteExpense = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
-        const [result] = await pool.query<ResultSetHeader>(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`,
-            [id]
-        );
+        const result = db.prepare(
+            `DELETE FROM \`${tableName}\` WHERE id = ?`
+        ).run(id);
 
-        if (result.affectedRows === 0) {
+        if (result.changes === 0) {
             res.status(404).json({ error: 'Expense not found' });
             return;
         }

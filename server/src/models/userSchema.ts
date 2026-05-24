@@ -1,105 +1,107 @@
-import pool from '../config/db.js';
-import type { RowDataPacket } from 'mysql2/promise';
-import { getUserTableName } from '../utils/tableUtils.js';
+import db from '../config/db.js';
+import { getUserTableName, getOldUserTableName } from '../utils/tableUtils.js';
 
-export const createUserTables = async (uid: string): Promise<void> => {
-    const incomeTable = getUserTableName(uid, 'incomes');
-    const expenseTable = getUserTableName(uid, 'expenses');
-    const splitTable = getUserTableName(uid, 'splits');
-    const friendTable = getUserTableName(uid, 'friends');
+export const createUserTables = (uid: string): void => {
+    const categories = ['incomes', 'expenses', 'splits', 'friends'];
 
     try {
-        const [dbCheck] = await pool.query<RowDataPacket[]>('SELECT DATABASE() as db');
-        const dbName = dbCheck && dbCheck[0] ? dbCheck[0].db : 'unknown';
-        console.log(`Creating tables for user ${uid} in database: ${dbName}`);
+        // Migration logic: Check if old tables exist and rename them
+        for (const cat of categories) {
+            const oldTable = getOldUserTableName(uid, cat);
+            const newTable = getUserTableName(uid, cat);
 
-        // Create user-specific friends table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS \`${friendTable}\` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(\`name\`)
-            )
-        `);
+            if (oldTable === newTable) continue;
 
-        // Ensure "Myself" profile exists
-        await pool.query(`
-            INSERT IGNORE INTO \`${friendTable}\` (name) VALUES ('Myself')
-        `);
+            const oldExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(oldTable);
 
-        // Create user-specific incomes table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS \`${incomeTable}\` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                amount DECIMAL(10, 2) NOT NULL,
-                source VARCHAR(255) NOT NULL,
-                description TEXT,
-                date DATE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+            if (oldExists) {
+                const newExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(newTable);
 
-        // Create user-specific expenses table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS \`${expenseTable}\` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                amount DECIMAL(10, 2) NOT NULL,
-                category_id INT NOT NULL,
-                description TEXT,
-                date DATE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (category_id) REFERENCES categories(id)
-            )
-        `);
-
-        // Create user-specific splits table with friend association and paid_at
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS \`${splitTable}\` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                friend_id INT,
-                friend_name VARCHAR(255),
-                amount DECIMAL(10, 2) NOT NULL,
-                description TEXT,
-                is_paid BOOLEAN DEFAULT FALSE,
-                paid_at TIMESTAMP NULL,
-                date DATE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Add missing columns if they don't exist
-        try {
-            await pool.query(`ALTER TABLE \`${splitTable}\` ADD COLUMN friend_id INT`);
-        } catch (e) { /* Column might already exist */ }
-        
-        try {
-            await pool.query(`ALTER TABLE \`${splitTable}\` ADD COLUMN friend_name VARCHAR(255)`);
-        } catch (e) { /* Column might already exist */ }
-        
-        try {
-            await pool.query(`ALTER TABLE \`${splitTable}\` ADD COLUMN paid_at TIMESTAMP NULL`);
-        } catch (e) { /* Column might already exist */ }
-
-        // Add foreign key constraint separately to avoid issues
-        try {
-            await pool.query(`
-                ALTER TABLE \`${splitTable}\` 
-                ADD CONSTRAINT \`fk_${splitTable}_friend\` 
-                FOREIGN KEY (friend_id) REFERENCES \`${friendTable}\`(id) ON DELETE SET NULL
-            `);
-        } catch (fkError) {
-            // Constraint might already exist, ignore error
-            console.log(`Foreign key constraint for ${splitTable} might already exist`);
+                if (!newExists) {
+                    console.log(`Migrating/Renaming old table ${oldTable} to ${newTable}...`);
+                    db.exec(`ALTER TABLE \`${oldTable}\` RENAME TO \`${newTable}\``);
+                }
+            }
         }
 
+        const incomeTable = getUserTableName(uid, 'incomes');
+        const expenseTable = getUserTableName(uid, 'expenses');
+        const splitTable = getUserTableName(uid, 'splits');
+        const friendTable = getUserTableName(uid, 'friends');
+
+        console.log(`Creating/Verifying tables for user ${uid}`);
+
+        db.transaction(() => {
+            // Create user-specific friends table
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS \`${friendTable}\` (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(\`name\`)
+                )
+            `);
+
+            // Ensure "Myself" profile exists
+            db.prepare(`INSERT OR IGNORE INTO \`${friendTable}\` (name) VALUES ('Myself')`).run();
+
+            // Create user-specific incomes table
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS \`${incomeTable}\` (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    amount REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    description TEXT,
+                    date TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
+            // Create user-specific expenses table
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS \`${expenseTable}\` (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    amount REAL NOT NULL,
+                    category_id INTEGER NOT NULL,
+                    description TEXT,
+                    date TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (category_id) REFERENCES categories(id)
+                )
+            `);
+
+            // Create user-specific splits table
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS \`${splitTable}\` (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    friend_id INTEGER,
+                    friend_name TEXT,
+                    amount REAL NOT NULL,
+                    description TEXT,
+                    is_paid INTEGER DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    date TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (friend_id) REFERENCES \`${friendTable}\`(id) ON DELETE SET NULL
+                )
+            `);
+
+            // Add missing columns if they don't exist
+            const tableInfo = db.prepare(`PRAGMA table_info(\`${splitTable}\`)`).all() as any[];
+            const columnNames = tableInfo.map(c => c.name);
+
+            if (!columnNames.includes('friend_id')) {
+                db.exec(`ALTER TABLE \`${splitTable}\` ADD COLUMN friend_id INTEGER`);
+            }
+            if (!columnNames.includes('friend_name')) {
+                db.exec(`ALTER TABLE \`${splitTable}\` ADD COLUMN friend_name TEXT`);
+            }
+            if (!columnNames.includes('paid_at')) {
+                db.exec(`ALTER TABLE \`${splitTable}\` ADD COLUMN paid_at DATETIME NULL`);
+            }
+        })();
+
         console.log(`Tables created successfully for user: ${uid}`);
-        
-        // Verify tables were created
-        const [tables] = await pool.query<RowDataPacket[]>(
-            'SHOW TABLES LIKE ?', [`user_${uid.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}_%`]
-        );
-        console.log(`Created ${tables.length} tables for user ${uid}`);
     } catch (error) {
         console.error(`Error creating tables for user ${uid}:`, error);
         throw error;

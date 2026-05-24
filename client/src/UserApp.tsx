@@ -78,7 +78,12 @@ export default function UserApp() {
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-white mb-1">Expense Tracker</h1>
-                        <p className="text-gray-400">{user.email}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-gray-400">{user.email}</p>
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                                Table ID: {user.id.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().substring(0, 8)}...
+                            </span>
+                        </div>
                     </div>
                     <Button
                         onClick={logout}

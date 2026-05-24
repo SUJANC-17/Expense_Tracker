@@ -1,7 +1,20 @@
+import fs from 'fs';
+import path from 'path';
+
+const dbDir = '/sdcard/Documents/ExpenseTracker';
+if (!fs.existsSync(dbDir)) {
+    try {
+        fs.mkdirSync(dbDir, { recursive: true });
+    } catch (err) {
+        console.error('Failed to create DB directory:', err);
+    }
+}
+
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initializeDatabase } from './models/schema.js';
+import db from './config/db.js';
 import { startMonthlyReportScheduler, generateAndSendReport } from './services/scheduler.js';
 import { startCleanupScheduler } from './services/cleanupService.js';
 import authRoutes from './routes/auth.js';
@@ -18,16 +31,19 @@ import type { AuthRequest } from './middleware/auth.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Initialize database
-initializeDatabase()
-    .then(() => console.log('Database initialized'))
-    .catch((err) => console.error('Failed to initialize database:', err));
+try {
+    initializeDatabase();
+    console.log('Database initialized');
+} catch (err) {
+    console.error('Failed to initialize database:', err);
+}
 
 // Start monthly report scheduler
 startMonthlyReportScheduler();
@@ -36,6 +52,15 @@ startCleanupScheduler();
 // Routes
 app.get('/', (req: Request, res: Response) => {
     res.json({ message: 'Expense Tracker API is running' });
+});
+
+app.get('/api/health', (req: Request, res: Response) => {
+    try {
+        db.prepare('SELECT 1').get();
+        res.json({ status: 'OK', database: 'Connected (SQLite)' });
+    } catch (error: any) {
+        res.status(500).json({ status: 'Error', database: error.message });
+    }
 });
 
 app.use('/api/auth', authRoutes);
