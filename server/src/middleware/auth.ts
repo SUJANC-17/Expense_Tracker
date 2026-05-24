@@ -31,9 +31,12 @@ export const authenticateToken = async (
             ...(decodedToken.email && { email: decodedToken.email }),
         };
 
-        // Update last activity timestamp (fire and forget)
-        pool.query('UPDATE users SET last_active_at = NOW() WHERE id = ?', [decodedToken.uid])
-            .catch(err => console.error('Failed to update last_active_at:', err));
+        // Update last activity timestamp (SQLite synchronous run)
+        try {
+            pool.prepare('UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?').run(decodedToken.uid);
+        } catch (err) {
+            console.error('Failed to update last_active_at:', err);
+        }
 
         next();
     } catch (error) {
