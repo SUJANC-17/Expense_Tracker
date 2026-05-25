@@ -13,6 +13,24 @@ NGROK_CONFIG="$NGROK_DIR/ngrok_config.yml"
 
 echo "--- Expense Tracker Termux Setup ---"
 
+stop_stale_services() {
+    echo "Stopping leftover processes from previous runs..."
+    pkill -f "Expense_Tracker/server.*tsx watch" 2>/dev/null || true
+    pkill -f "Expense_Tracker/client.*vite" 2>/dev/null || true
+    pkill -f "ngrok start proxy" 2>/dev/null || true
+    pkill -f "tsx watch src/index.ts" 2>/dev/null || true
+
+    if command -v lsof >/dev/null 2>&1; then
+        for port in "$PORT" 5173 5174 5175 5176 5177 4040; do
+            pids="$(lsof -t -i:"$port" 2>/dev/null || true)"
+            if [ -n "$pids" ]; then
+                kill $pids 2>/dev/null || true
+            fi
+        done
+    fi
+    sleep 1
+}
+
 # 0. Request storage access (required for /sdcard/Documents access)
 echo "Checking storage access..."
 if [ ! -d "$HOME/storage" ]; then
@@ -84,13 +102,26 @@ ensure_ngrok() {
     echo "Installed ngrok at $NGROK_BIN"
 }
 
+verify_ngrok_binary() {
+    if "$NGROK_BIN" version >/dev/null 2>&1; then
+        return 0
+    fi
+    echo ""
+    echo "ngrok cannot run on this Termux install (often: unexpected e_type: 2)."
+    echo "  - Install Termux from F-Droid, not Google Play"
+    echo "  - Remove broken binary: rm -f $NGROK_DIR/ngrok && re-run this script"
+    echo "  - Or use local-only mode: SKIP_NGROK=1 ./start_termux.sh"
+    echo ""
+    return 1
+}
+
 start_ngrok() {
     if [ "${SKIP_NGROK:-0}" = "1" ]; then
         echo "Skipping ngrok (SKIP_NGROK=1)."
         return 1
     fi
 
-    if ! ensure_ngrok; then
+    if ! ensure_ngrok || ! verify_ngrok_binary; then
         echo ""
         echo "Remote tunnel not started. App still works on this device at http://127.0.0.1:5173"
         echo "To fix ngrok later:"
@@ -119,6 +150,8 @@ export PORT="${PORT:-3000}"
 export VITE_API_URL="${VITE_API_URL:-http://127.0.0.1:${PORT}/api}"
 
 mkdir -p "$(dirname "$DB_PATH")" 2>/dev/null || true
+
+stop_stale_services
 
 # 2. Install npm dependencies
 echo "Installing server dependencies..."
@@ -156,7 +189,7 @@ fi
 echo "Database:     $DB_PATH"
 echo "API URL:      $VITE_API_URL"
 echo ""
-echo "Open the frontend at http://127.0.0.1:5173 on this device."
+echo "Open the frontend URL shown in the Vite output above (often http://127.0.0.1:5173)."
 if [ "$NGROK_STARTED" = true ]; then
     echo "For remote API access, use the ngrok URL above or http://127.0.0.1:4040"
 fi
