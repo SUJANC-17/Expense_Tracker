@@ -57,9 +57,10 @@ export const getCategories = (req: AuthRequest, res: Response): void => {
 
 // Add new expense
 export const addExpense = (req: AuthRequest, res: Response): void => {
-    const { amount, category_id, description, date } = req.body;
+    const { amount, category_id, categoryId, description, date } = req.body;
+    const finalCategoryId = category_id || categoryId;
 
-    if (amount === undefined || amount === null || amount === '' || !category_id || !date) {
+    if (amount === undefined || amount === null || amount === '' || !finalCategoryId || !date) {
         res.status(400).json({ error: 'Amount, category, and date are required' });
         return;
     }
@@ -68,9 +69,11 @@ export const addExpense = (req: AuthRequest, res: Response): void => {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
         
-        const result = db.prepare(
-            `INSERT INTO \`${tableName}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`
-        ).run(amount, category_id, description || null, date);
+        const result = executeWithTableRetry(uid, () => {
+            return db.prepare(
+                `INSERT INTO \`${tableName}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`
+            ).run(amount, finalCategoryId, description || null, date);
+        });
 
         const newExpense = db.prepare(
             `SELECT e.*, c.name as category_name 
@@ -92,14 +95,15 @@ export const addExpense = (req: AuthRequest, res: Response): void => {
 // Update expense
 export const updateExpense = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
-    const { amount, category_id, description, date } = req.body;
+    const { amount, category_id, categoryId, description, date } = req.body;
+    const finalCategoryId = category_id || categoryId;
 
     try {
         const uid = req.user?.uid!;
         const tableName = getUserTableName(uid, 'expenses');
         const result = db.prepare(
             `UPDATE \`${tableName}\` SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ?`
-        ).run(amount, category_id, description, date, id);
+        ).run(amount, finalCategoryId, description, date, id);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Expense not found' });
