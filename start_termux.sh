@@ -54,7 +54,6 @@ fi
 export DB_PATH="${DB_PATH:-/sdcard/Documents/ExpenseTracker/expense_tracker.db}"
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${PORT:-3000}"
-export VITE_API_URL="${VITE_API_URL:-http://127.0.0.1:${PORT}/api}"
 
 mkdir -p "$(dirname "$DB_PATH")" 2>/dev/null || true
 
@@ -74,7 +73,7 @@ SERVER_PID=$!
 sleep 2
 
 echo "Starting frontend (Vite) on port 5173..."
-(cd client && VITE_API_URL="$VITE_API_URL" npm run dev -- --host 0.0.0.0) &
+(cd client && npm run dev -- --host 0.0.0.0) &
 CLIENT_PID=$!
 
 echo ""
@@ -82,7 +81,6 @@ echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
 echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
 echo "Database:     $DB_PATH"
-echo "API URL:      $VITE_API_URL"
 echo ""
 echo "Open the frontend URL shown in the Vite output above (often http://127.0.0.1:5173)."
 echo "Keep this session open, or run under tmux/screen."
