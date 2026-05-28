@@ -18,12 +18,13 @@ import {
 import {
     LayoutDashboard,
     TrendingUp,
-    TrendingDown,
     Users,
     FileText,
     UserPlus,
     LogOut,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { SkeletonLoader } from "./components/SkeletonLoader";
 
 type TabValue =
     | "dashboard"
@@ -68,11 +69,7 @@ export default function UserApp() {
     };
 
     if (loading || dataLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-                <div className="text-white">Loading...</div>
-            </div>
-        );
+        return <SkeletonLoader />;
     }
 
     if (!user) {
@@ -80,9 +77,16 @@ export default function UserApp() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-            <div className="container mx-auto p-4 md:p-8">
-                <div className="flex items-center justify-between mb-8">
+        <>
+            <div className="mesh-bg-container">
+                <div className="mesh-blob-1"></div>
+                <div className="mesh-blob-2"></div>
+                <div className="mesh-blob-3"></div>
+            </div>
+            
+            <div className="min-h-screen">
+                <div className="container mx-auto p-4 md:p-8">
+                    <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-white mb-1">Expense Tracker</h1>
                         <div className="flex items-center gap-2">
@@ -154,64 +158,75 @@ export default function UserApp() {
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="dashboard">
-                        <Dashboard
-                            incomes={incomes}
-                            expenses={expenses}
-                            splits={splits}
-                        />
-                    </TabsContent>
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeTab}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            <TabsContent value="dashboard" className="mt-0">
+                                <Dashboard
+                                    incomes={incomes}
+                                    expenses={expenses}
+                                    splits={splits}
+                                />
+                            </TabsContent>
 
-                    <TabsContent value="income">
-                        <IncomeManager
-                            incomes={incomes}
-                            userId={user.id}
-                            onAdd={addIncome}
-                            onUpdate={updateIncome}
-                            onDelete={deleteIncome}
-                        />
-                    </TabsContent>
+                            <TabsContent value="income" className="mt-0">
+                                <IncomeManager
+                                    incomes={incomes}
+                                    userId={user.id}
+                                    onAdd={addIncome}
+                                    onUpdate={updateIncome}
+                                    onDelete={deleteIncome}
+                                />
+                            </TabsContent>
 
-                    <TabsContent value="expenses">
-                        <ExpenseManager
-                            expenses={expenses}
-                            userId={user.id}
-                            onAdd={addExpense}
-                            onUpdate={updateExpense}
-                            onDelete={deleteExpense}
-                        />
-                    </TabsContent>
+                            <TabsContent value="expenses" className="mt-0">
+                                <ExpenseManager
+                                    expenses={expenses}
+                                    userId={user.id}
+                                    onAdd={addExpense}
+                                    onUpdate={updateExpense}
+                                    onDelete={deleteExpense}
+                                />
+                            </TabsContent>
 
-                    <TabsContent value="splits">
-                        <SplitManager
-                            splits={splits}
-                            userId={user.id}
-                            onAdd={addSplit}
-                            onAddBulk={addSplitBulk}
-                            onUpdate={updateSplit}
-                            onDelete={deleteSplit}
-                            onMarkPaid={markSplitPaid}
-                            friends={friends}
-                        />
-                    </TabsContent>
+                            <TabsContent value="splits" className="mt-0">
+                                <SplitManager
+                                    splits={splits}
+                                    userId={user.id}
+                                    onAdd={addSplit}
+                                    onAddBulk={addSplitBulk}
+                                    onUpdate={updateSplit}
+                                    onDelete={deleteSplit}
+                                    onMarkPaid={markSplitPaid}
+                                    friends={friends}
+                                />
+                            </TabsContent>
 
-                    <TabsContent value="friends">
-                        <FriendsManager
-                            friends={friends}
-                            onAdd={addFriend}
-                            onDelete={deleteFriend}
-                        />
-                    </TabsContent>
+                            <TabsContent value="friends" className="mt-0">
+                                <FriendsManager
+                                    friends={friends}
+                                    onAdd={addFriend}
+                                    onDelete={deleteFriend}
+                                />
+                            </TabsContent>
 
-                    <TabsContent value="reports">
-                        <Reports
-                            incomes={incomes}
-                            expenses={expenses}
-                            splits={splits}
-                        />
-                    </TabsContent>
+                            <TabsContent value="reports" className="mt-0">
+                                <Reports
+                                    incomes={incomes}
+                                    expenses={expenses}
+                                    splits={splits}
+                                />
+                            </TabsContent>
+                        </motion.div>
+                    </AnimatePresence>
                 </Tabs>
             </div>
         </div>
+        </>
     );
 }

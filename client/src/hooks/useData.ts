@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Income, Expense, Split, Friend } from '../appTypes';
 import { apiClient } from '../utils/api';
+import { toast } from 'sonner';
 
 export const useData = (userId: string | undefined) => {
     const [incomes, setIncomes] = useState<Income[]>([]);
@@ -27,7 +28,7 @@ export const useData = (userId: string | undefined) => {
         } catch (error) {
             console.error('CRITICAL: Error fetching all data:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Database Connection Error: ${errorMessage}`);
+            toast.error(`Database Connection Error: ${errorMessage}`);
         } finally {
             console.log('Data fetch attempt completed.');
             setLoading(false);
@@ -53,9 +54,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const newIncome = await apiClient.post('/incomes', income);
             setIncomes([...incomes, newIncome]);
+            toast.success('Income added successfully');
             return newIncome;
         } catch (error) {
             console.error('Error adding income:', error);
+            toast.error('Failed to add income');
             throw error;
         }
     };
@@ -64,9 +67,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const updated = await apiClient.put(`/incomes/${id}`, income);
             setIncomes(incomes.map(i => i.id === id ? updated : i));
+            toast.success('Income updated');
             return updated;
         } catch (error) {
             console.error('Error updating income:', error);
+            toast.error('Failed to update income');
             throw error;
         }
     };
@@ -75,8 +80,10 @@ export const useData = (userId: string | undefined) => {
         try {
             await apiClient.delete(`/incomes/${id}`);
             setIncomes(incomes.filter(i => i.id !== id));
+            toast.success('Income deleted');
         } catch (error) {
             console.error('Error deleting income:', error);
+            toast.error('Failed to delete income');
             throw error;
         }
     };
@@ -86,9 +93,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const newExpense = await apiClient.post('/expenses', expense);
             setExpenses([...expenses, newExpense]);
+            toast.success('Expense added successfully');
             return newExpense;
         } catch (error) {
             console.error('Error adding expense:', error);
+            toast.error('Failed to add expense');
             throw error;
         }
     };
@@ -97,9 +106,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const updated = await apiClient.put(`/expenses/${id}`, expense);
             setExpenses(expenses.map(e => e.id === id ? updated : e));
+            toast.success('Expense updated');
             return updated;
         } catch (error) {
             console.error('Error updating expense:', error);
+            toast.error('Failed to update expense');
             throw error;
         }
     };
@@ -108,8 +119,10 @@ export const useData = (userId: string | undefined) => {
         try {
             await apiClient.delete(`/expenses/${id}`);
             setExpenses(expenses.filter(e => e.id !== id));
+            toast.success('Expense deleted');
         } catch (error) {
             console.error('Error deleting expense:', error);
+            toast.error('Failed to delete expense');
             throw error;
         }
     };
@@ -119,9 +132,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const newSplit = await apiClient.post('/splits', split);
             setSplits([...splits, newSplit]);
+            toast.success('Split created successfully');
             return newSplit;
         } catch (error) {
             console.error('Error adding split:', error);
+            toast.error('Failed to create split');
             throw error;
         }
     };
@@ -130,9 +145,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const updated = await apiClient.put(`/splits/${id}`, split);
             setSplits(splits.map(s => s.id === id ? updated : s));
+            toast.success('Split updated');
             return updated;
         } catch (error) {
             console.error('Error updating split:', error);
+            toast.error('Failed to update split');
             throw error;
         }
     };
@@ -141,8 +158,10 @@ export const useData = (userId: string | undefined) => {
         try {
             await apiClient.delete(`/splits/${id}`);
             setSplits(splits.filter(s => s.id !== id));
+            toast.success('Split deleted');
         } catch (error) {
             console.error('Error deleting split:', error);
+            toast.error('Failed to delete split');
             throw error;
         }
     };
@@ -151,8 +170,10 @@ export const useData = (userId: string | undefined) => {
         try {
             await apiClient.post('/splits/bulk', bulkData);
             await fetchAllData(); // Refresh everything to get new splits and updated expenses
+            toast.success('Group split created successfully!');
         } catch (error) {
             console.error('Error adding bulk splits:', error);
+            toast.error('Failed to create group split');
             throw error;
         }
     };
@@ -166,9 +187,11 @@ export const useData = (userId: string | undefined) => {
         try {
             const newFriend = await apiClient.post('/friends', friend);
             setFriends([...friends, newFriend]);
+            toast.success('Friend added');
             return newFriend;
         } catch (error) {
             console.error('Error adding friend:', error);
+            toast.error('Failed to add friend');
             throw error;
         }
     };
@@ -177,8 +200,10 @@ export const useData = (userId: string | undefined) => {
         try {
             await apiClient.delete(`/friends/${id}`);
             setFriends(friends.filter(f => f.id !== id));
+            toast.success('Friend removed');
         } catch (error) {
             console.error('Error deleting friend:', error);
+            toast.error('Failed to remove friend');
             throw error;
         }
     };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import UserApp from "./UserApp";
+import { Toaster } from "sonner";
 
 export default function App() {
   // Simple router check - does not use hooks that trigger auth/data fetching!
@@ -22,8 +23,18 @@ export default function App() {
   }, []);
 
   if (isAdmin) {
-    return <AdminDashboard />;
+    return (
+      <>
+        <AdminDashboard />
+        <Toaster theme="dark" position="bottom-right" />
+      </>
+    );
   }
 
-  return <UserApp />;
+  return (
+    <>
+      <UserApp />
+      <Toaster theme="dark" position="bottom-right" />
+    </>
+  );
 }
