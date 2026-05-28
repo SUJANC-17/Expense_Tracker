@@ -58,7 +58,14 @@ export default function UserApp() {
         deleteFriend,
     } = useData(user?.id);
 
-    const [activeTab, setActiveTab] = useState<TabValue>("dashboard");
+    const [activeTab, setActiveTab] = useState<TabValue>(() => {
+        return (sessionStorage.getItem('expenseTracker_activeTab') as TabValue) || 'dashboard';
+    });
+
+    const handleTabChange = (value: string) => {
+        setActiveTab(value as TabValue);
+        sessionStorage.setItem('expenseTracker_activeTab', value);
+    };
 
     if (loading || dataLoading) {
         return (
@@ -97,9 +104,7 @@ export default function UserApp() {
 
                 <Tabs
                     value={activeTab}
-                    onValueChange={(value) =>
-                        setActiveTab(value as TabValue)
-                    }
+                    onValueChange={handleTabChange}
                     className="w-full"
                 >
                     <TabsList className="grid w-full grid-cols-6 mb-8 bg-white/10 backdrop-blur-xl border border-white/20">

@@ -70,7 +70,28 @@ router.get('/users/:uid/tables/:tableName/data', (req, res) => {
             return;
         }
 
-        const rows = db.prepare(`SELECT * FROM \`${tableName}\` LIMIT 100`).all();
+        let query = `SELECT * FROM \`${tableName}\` LIMIT 100`;
+
+        if (tableName.includes('expenses')) {
+            query = `
+                SELECT e.*, c.name as category_name 
+                FROM \`${tableName}\` e 
+                LEFT JOIN categories c ON e.category_id = c.id 
+                ORDER BY e.date DESC LIMIT 100
+            `;
+        } else if (tableName.includes('splits')) {
+            const friendsTable = getUserTableName(uid, 'friends');
+            query = `
+                SELECT s.*, f.name as linked_friend_name 
+                FROM \`${tableName}\` s 
+                LEFT JOIN \`${friendsTable}\` f ON s.friend_id = f.id 
+                ORDER BY s.date DESC LIMIT 100
+            `;
+        } else {
+            query = `SELECT * FROM \`${tableName}\` ORDER BY id DESC LIMIT 100`;
+        }
+
+        const rows = db.prepare(query).all();
         res.json(rows);
     } catch (error) {
         console.error('Error fetching table data:', error);

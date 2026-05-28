@@ -8,14 +8,14 @@ export const initializeDatabase = (): void => {
         id TEXT PRIMARY KEY,
         jwt_id TEXT,
         email TEXT UNIQUE NOT NULL,
-        last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        last_active_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
       )
     `);
 
-    // Add last_active_at if it doesn't exist (SQLite ALTER TABLE is limited but this should work for base setup)
+    // Add last_active_at if it doesn't exist
     try {
-      db.exec('ALTER TABLE users ADD COLUMN last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+      db.exec("ALTER TABLE users ADD COLUMN last_active_at DATETIME DEFAULT (DATETIME('now', 'localtime'))");
     } catch (e) { /* Column probably already exists */ }
 
     // Add jwt_id if it doesn't exist
@@ -28,7 +28,7 @@ export const initializeDatabase = (): void => {
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
       )
     `);
 

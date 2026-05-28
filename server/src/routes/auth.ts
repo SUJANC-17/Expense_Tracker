@@ -17,7 +17,7 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
         if (existing) {
             // Update last_active_at, jwt_id, and id (to ensure it matches current Firebase UID)
             db.prepare(
-                'UPDATE users SET id = ?, last_active_at = CURRENT_TIMESTAMP, jwt_id = ? WHERE email = ?'
+                "UPDATE users SET id = ?, last_active_at = DATETIME('now', 'localtime'), jwt_id = ? WHERE email = ?"
             ).run(uid, uid, email);
             // Ensure tables exist for existing users too
             createUserTables(uid);

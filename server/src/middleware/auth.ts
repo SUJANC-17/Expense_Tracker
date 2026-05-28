@@ -33,7 +33,7 @@ export const authenticateToken = async (
 
         // Update last activity timestamp (SQLite synchronous run)
         try {
-            pool.prepare('UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?').run(decodedToken.uid);
+            pool.prepare("UPDATE users SET last_active_at = DATETIME('now', 'localtime') WHERE id = ?").run(decodedToken.uid);
         } catch (err) {
             console.error('Failed to update last_active_at:', err);
         }
