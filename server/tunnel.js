@@ -6,7 +6,7 @@ const localtunnel = require('localtunnel');
         // We use the localtunnel API directly to bypass the Android CLI crash
         const tunnel = await localtunnel({ 
             port: 5173, 
-            subdomain: 'sujan-expenses' // Change this if you want a different URL!
+            subdomain: 'expense-tracker' // Change this if you want a different URL!
         });
 
         console.log('\n======================================================');
