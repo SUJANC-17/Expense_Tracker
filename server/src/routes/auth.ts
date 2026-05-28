@@ -11,17 +11,17 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
     try {
         const { uid, email } = req.user!;
 
-        // Check if user exists
-        const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(uid);
+        // Check if user exists by ID or Email (in case Firebase UID changed for the same email)
+        const existing = db.prepare('SELECT id FROM users WHERE id = ? OR email = ?').get(uid, email);
 
         if (existing) {
-            // Update last_active_at and jwt_id for existing users
+            // Update last_active_at, jwt_id, and id (to ensure it matches current Firebase UID)
             db.prepare(
-                'UPDATE users SET last_active_at = CURRENT_TIMESTAMP, jwt_id = ? WHERE id = ?'
-            ).run(uid, uid);
+                'UPDATE users SET id = ?, last_active_at = CURRENT_TIMESTAMP, jwt_id = ? WHERE email = ?'
+            ).run(uid, uid, email);
             // Ensure tables exist for existing users too
             createUserTables(uid);
-            res.json({ message: 'User already exists', uid });
+            res.json({ message: 'User authenticated', uid });
             return;
         }
 
