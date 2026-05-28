@@ -77,22 +77,18 @@ echo "Starting frontend (Vite) on port 5173..."
 (cd client && npm run dev -- --host 0.0.0.0) &
 CLIENT_PID=$!
 
-echo "Starting Serveo tunnel on port 5173..."
-# Ensure an SSH key exists so Serveo grants the custom subdomain
-if [ ! -f ~/.ssh/id_rsa ]; then
-    echo "Generating SSH key for Serveo..."
-    ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa >/dev/null 2>&1
-fi
+echo "Fixing TSX permissions..."
+chmod +x server/node_modules/.bin/tsx 2>/dev/null || true
 
-ssh -o StrictHostKeyChecking=accept-new -R expense-tracker:80:localhost:5173 serveo.net &
-SERVEO_PID=$!
+echo "Starting localtunnel on port 5173..."
+(cd server && if [ ! -d "node_modules/localtunnel" ]; then npm install localtunnel; fi && node tunnel.js) &
+TUNNEL_PID=$!
 
 echo ""
 echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
 echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
-echo "Serveo PID:   $SERVEO_PID"
-echo "Public URL:   https://expense-tracker.serveo.net"
+echo "Tunnel PID:   $TUNNEL_PID"
 echo "Database:     $DB_PATH"
 echo ""
 echo "Open the frontend URL shown in the Vite output above (often http://127.0.0.1:5173)."
@@ -101,8 +97,8 @@ echo ""
 
 cleanup() {
     echo "Stopping services..."
-    kill "$SERVER_PID" "$CLIENT_PID" "$SERVEO_PID" 2>/dev/null || true
+    kill "$SERVER_PID" "$CLIENT_PID" "$TUNNEL_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-wait $SERVER_PID $CLIENT_PID $SERVEO_PID
+wait $SERVER_PID $CLIENT_PID $TUNNEL_PID
