@@ -8,6 +8,21 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { Plus, Pencil, Trash2, Check, Users, User, Split as SplitIcon } from 'lucide-react';
+import CountUp from 'react-countup';
+import { motion } from 'framer-motion';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
 
 interface SplitManagerProps {
   splits: Split[];
@@ -421,9 +436,15 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
             </CardHeader>
             <CardContent>
               {sortedSplits.length > 0 ? (
-                <div className="space-y-3">
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="show"
+                  className="space-y-3"
+                >
                   {sortedSplits.map((split) => (
-                    <div
+                    <motion.div
+                      variants={itemVariants}
                       key={split.id}
                       className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                     >
@@ -474,9 +495,9 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               ) : (
                 <p className="text-gray-400 text-center py-8">No split expenses yet. Add one to track shared costs!</p>
               )}
@@ -491,7 +512,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-orange-400 mb-1">
-                ₹{unpaidTotal.toFixed(2)}
+                <CountUp end={unpaidTotal} prefix="₹" decimals={2} duration={2} preserveValue={true} />
               </div>
               <p className="text-xs text-gray-400">Total amount people owe you</p>
             </CardContent>

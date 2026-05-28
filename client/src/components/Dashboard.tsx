@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import type { Income, Expense, Split } from '../appTypes';
 import { getCategoryName } from '../utils/categories';
 import { DollarSign, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import CountUp from 'react-countup';
 
 interface DashboardProps {
   incomes: Income[];
@@ -65,7 +66,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl ${summary.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              ₹{summary.balance.toFixed(2)}
+              <CountUp end={summary.balance} prefix="₹" decimals={2} duration={2} preserveValue={true} />
             </div>
             <p className="text-xs text-gray-400 mt-1">
               {summary.balance >= 0 ? 'Surplus' : 'Deficit'}
@@ -80,7 +81,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl text-green-400">
-              ₹{summary.totalIncome.toFixed(2)}
+              <CountUp end={summary.totalIncome} prefix="₹" decimals={2} duration={2} preserveValue={true} />
             </div>
             <p className="text-xs text-gray-400 mt-1">
               This month
@@ -95,7 +96,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl text-red-400">
-              ₹{summary.totalExpenses.toFixed(2)}
+              <CountUp end={summary.totalExpenses} prefix="₹" decimals={2} duration={2} preserveValue={true} />
             </div>
             <p className="text-xs text-gray-400 mt-1">
               This month
@@ -137,7 +138,9 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between pb-3 border-b border-white/10">
                   <span className="text-gray-300">Total Unpaid</span>
-                  <span className="text-orange-400">₹{summary.totalUnpaid.toFixed(2)}</span>
+                  <span className="text-orange-400 font-bold">
+                    <CountUp end={summary.totalUnpaid} prefix="₹" decimals={2} duration={2} preserveValue={true} />
+                  </span>
                 </div>
                 {summary.unpaidSplits.slice(0, 3).map((split) => (
                   <div key={split.id} className="flex items-center justify-between">
