@@ -127,7 +127,8 @@ export default function AdminDashboard() {
     const inspectTableData = async (uid: string, tableName: string) => {
         try {
             const res = await adminApi.get(`/admin/users/${uid}/tables/${tableName}/data`);
-            setSelectedTableData({ tableName, rows: res.data || [] });
+            const fetchedRows = Array.isArray(res) ? res : (res.data || []);
+            setSelectedTableData({ tableName, rows: fetchedRows });
         } catch (err) { console.error(err); }
     };
 
