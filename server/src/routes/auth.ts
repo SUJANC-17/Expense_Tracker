@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { createUserTables } from '../models/userSchema.js';
+import { sendLoginNotification } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
         const { uid, email } = req.user!;
 
         // Check if user exists by ID or Email (in case Firebase UID changed for the same email)
-        const existing = db.prepare('SELECT id FROM users WHERE id = ? OR email = ?').get(uid, email);
+        const existing = db.prepare('SELECT id, last_active_at FROM users WHERE id = ? OR email = ?').get(uid, email) as any;
 
         if (existing) {
             // Update last_active_at, jwt_id, and id (to ensure it matches current Firebase UID)
@@ -22,6 +23,15 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
             // Ensure tables exist for existing users too
             createUserTables(uid);
             res.json({ message: 'User authenticated', uid });
+
+            // Send login notification only if inactive for > 1 hour to prevent spam on page refresh
+            if (email) {
+                const lastActive = existing.last_active_at ? new Date(existing.last_active_at + 'Z').getTime() : 0; // Append Z to parse as UTC/localtime correctly or handle via Date
+                const now = new Date().getTime();
+                if (!existing.last_active_at || (now - lastActive > 60 * 60 * 1000) || isNaN(lastActive)) {
+                    sendLoginNotification(email).catch(console.error);
+                }
+            }
             return;
         }
 
@@ -34,6 +44,10 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
         createUserTables(uid);
 
         res.status(201).json({ message: 'User registered successfully', uid });
+        
+        if (email) {
+            sendLoginNotification(email).catch(console.error);
+        }
     } catch (error) {
         console.error('Error registering user:', error);
         res.status(500).json({ error: 'Failed to register user' });

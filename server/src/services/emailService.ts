@@ -67,6 +67,38 @@ export const sendMonthlyReport = async (
   }
 };
 
+export const sendLoginNotification = async (email: string): Promise<void> => {
+  try {
+    const loginTime = new Date().toLocaleString();
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to: email,
+      subject: 'New Login to Expense Tracker',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #2563eb; color: white; padding: 20px; text-align: center;">
+            <h2 style="margin: 0;">New Login Detected</h2>
+          </div>
+          <div style="padding: 30px; color: #1e293b;">
+            <p>Hello,</p>
+            <p>You have successfully logged into the Expense Tracker app.</p>
+            <p><strong>Time:</strong> ${loginTime}</p>
+            <p>If this was you, you can safely ignore this email. If you did not log in, please secure your Google account immediately.</p>
+            <p style="margin-top: 30px;">Best regards,<br>The Expense Tracker Team</p>
+          </div>
+          <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+            This is an automated system notification. Please do not reply.
+          </div>
+        </div>
+      `
+    });
+    console.log(`Login notification sent to ${email}`);
+  } catch (error) {
+    console.error('Error sending login notification:', error);
+    // Don't throw error to avoid blocking the login flow
+  }
+};
+
 export const sendInactivityDeletionNotice = async (
   email: string,
   data: any // Full data object

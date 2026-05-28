@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Badge } from './ui/badge';
-import { Plus, Pencil, Trash2, Check, Users, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, Users, User, Split as SplitIcon } from 'lucide-react';
 
 interface SplitManagerProps {
   splits: Split[];
@@ -23,6 +23,10 @@ interface SplitManagerProps {
 export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDelete, onMarkPaid, friends }: SplitManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingSplit, setEditingSplit] = useState<Split | null>(null);
+  
+  const [splitMode, setSplitMode] = useState<'equal' | 'manual'>('equal');
+  const [manualShares, setManualShares] = useState<Record<string, string>>({});
+
   const [formData, setFormData] = useState({
     amount: '',
     description: '',
@@ -34,47 +38,79 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
 
   const splitPreview = useMemo(() => {
     const totalAmount = parseFloat(formData.amount) || 0;
-    const peopleCount = formData.selectedFriendIds.length + (formData.includeMyself ? 1 : 0) + (formData.customFriendName ? 1 : 0);
+    const selectedPeople = [
+      ...(formData.includeMyself ? ['myself'] : []),
+      ...formData.selectedFriendIds.map(id => id.toString()),
+      ...(formData.customFriendName ? ['custom'] : [])
+    ];
+    
+    const peopleCount = selectedPeople.length;
 
     if (peopleCount === 0 || totalAmount === 0) return null;
 
-    const share = totalAmount / peopleCount;
-    return {
-      share,
-      peopleCount,
-    };
-  }, [formData.amount, formData.selectedFriendIds, formData.includeMyself, formData.customFriendName]);
+    if (splitMode === 'equal') {
+      const baseShare = Math.floor((totalAmount / peopleCount) * 100) / 100;
+      const remainder = Math.round((totalAmount - baseShare * peopleCount) * 100);
+      
+      const shares: Record<string, number> = {};
+      selectedPeople.forEach((person, index) => {
+        shares[person] = baseShare + (index < remainder ? 0.01 : 0);
+      });
+
+      return {
+        mode: 'equal',
+        shares,
+        peopleCount,
+        totalAssigned: totalAmount,
+        isValid: true
+      };
+    } else {
+      let totalAssigned = 0;
+      const shares: Record<string, number> = {};
+      selectedPeople.forEach(person => {
+        const amt = parseFloat(manualShares[person]) || 0;
+        shares[person] = amt;
+        totalAssigned += amt;
+      });
+      
+      const isValid = Math.abs(totalAmount - totalAssigned) < 0.01;
+      return {
+        mode: 'manual',
+        shares,
+        peopleCount,
+        totalAssigned,
+        isValid
+      };
+    }
+  }, [formData.amount, formData.selectedFriendIds, formData.includeMyself, formData.customFriendName, splitMode, manualShares]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(formData.amount);
 
     if (editingSplit) {
-      // Editing is still single-friend for simplicity of existing data
       onUpdate(editingSplit.id, {
         amount,
         description: formData.description,
         date: formData.date,
       });
     } else {
-      const share = splitPreview?.share || 0;
+      const shares = splitPreview?.shares || {};
       const bulkSplits = [];
 
-      // Friends splits
       formData.selectedFriendIds.forEach(id => {
         const friend = friends.find(f => f.id === id);
         bulkSplits.push({
           friend_id: id,
           friend_name: friend?.name,
-          amount: share,
+          amount: shares[id.toString()] || 0,
         });
       });
 
-      // Custom friend split
       if (formData.customFriendName) {
         bulkSplits.push({
           friend_name: formData.customFriendName,
-          amount: share,
+          amount: shares['custom'] || 0,
         });
       }
 
@@ -82,8 +118,8 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
         totalAmount: amount,
         description: formData.description,
         date: formData.date,
-        userShare: formData.includeMyself ? share : 0,
-        splits: bulkSplits,
+        userShare: formData.includeMyself ? (shares['myself'] || 0) : 0,
+        splits: bulkSplits.filter(s => s.amount > 0),
       });
     }
     resetForm();
@@ -98,6 +134,8 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
       includeMyself: true,
       customFriendName: '',
     });
+    setSplitMode('equal');
+    setManualShares({});
     setEditingSplit(null);
     setOpen(false);
   };
@@ -108,7 +146,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
       amount: split.amount.toString(),
       description: split.description,
       date: split.date,
-      selectedFriendIds: [], // Editor doesn't support bulk adjustment yet
+      selectedFriendIds: [],
       includeMyself: false,
       customFriendName: split.friendName,
     });
@@ -122,6 +160,10 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
         ? prev.selectedFriendIds.filter(fid => fid !== id)
         : [...prev.selectedFriendIds, id]
     }));
+  };
+
+  const handleManualShareChange = (personKey: string, value: string) => {
+    setManualShares(prev => ({ ...prev, [personKey]: value }));
   };
 
   const sortedSplits = [...splits].sort((a, b) => {
@@ -147,55 +189,14 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto backdrop-blur-xl bg-slate-900/95 border-white/20 text-white sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-white">
+              <DialogTitle className="text-white flex items-center gap-2">
+                <SplitIcon className="w-5 h-5 text-orange-400" />
                 {editingSplit ? 'Edit Split' : 'New Split Trip/Bill'}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Who is splitting this?</Label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                    <div
-                      onClick={() => setFormData(p => ({ ...p, includeMyself: !p.includeMyself }))}
-                      className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${formData.includeMyself ? 'bg-orange-500/20 border-orange-500/50' : 'bg-white/5 border-white/10'} border`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-orange-400" />
-                        <span>Myself</span>
-                      </div>
-                      {formData.includeMyself && <Check className="w-4 h-4 text-orange-400" />}
-                    </div>
-
-                    {friends.map(friend => (
-                      <div
-                        key={friend.id}
-                        onClick={() => toggleFriend(friend.id)}
-                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${formData.selectedFriendIds.includes(friend.id) ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5 border-white/10'} border`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-blue-400" />
-                          <span>{friend.name}</span>
-                        </div>
-                        {formData.selectedFriendIds.includes(friend.id) && <Check className="w-4 h-4 text-blue-400" />}
-                      </div>
-                    ))}
-                  </div>
-
-                  {!editingSplit && (
-                    <div className="pt-2">
-                      <Label htmlFor="customName" className="text-xs text-gray-400">Or add a one-time name</Label>
-                      <Input
-                        id="customName"
-                        value={formData.customFriendName}
-                        onChange={(e) => setFormData({ ...formData, customFriendName: e.target.value })}
-                        className="bg-white/10 border-white/20 text-white mt-1"
-                        placeholder="Enter name..."
-                      />
-                    </div>
-                  )}
-                </div>
-
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="amount" className="text-gray-300">Total Bill Amount</Label>
@@ -206,7 +207,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                       required
-                      className="bg-white/10 border-white/20 text-white"
+                      className="bg-white/10 border-white/20 text-white text-lg font-bold placeholder:font-normal"
                       placeholder="0.00"
                     />
                   </div>
@@ -223,6 +224,119 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                   </div>
                 </div>
 
+                {!editingSplit && (
+                  <div className="bg-slate-800/50 p-1 rounded-lg flex mt-2 border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setSplitMode('equal')}
+                      className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${splitMode === 'equal' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      Split Equally
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSplitMode('manual')}
+                      className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${splitMode === 'manual' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      Split Manually
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Who is splitting this?</Label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    
+                    {/* Myself */}
+                    <div className={`flex items-center justify-between p-3 rounded-lg transition-colors ${formData.includeMyself ? 'bg-orange-500/20 border-orange-500/50' : 'bg-white/5 border-white/10'} border`}>
+                      <div 
+                        className="flex items-center gap-2 flex-1 cursor-pointer"
+                        onClick={() => setFormData(p => ({ ...p, includeMyself: !p.includeMyself }))}
+                      >
+                        <User className="w-4 h-4 text-orange-400" />
+                        <span>Myself</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {splitMode === 'manual' && formData.includeMyself ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="w-24 h-7 text-right bg-white/10 border-white/20 text-white"
+                            placeholder="0.00"
+                            value={manualShares['myself'] || ''}
+                            onChange={(e) => handleManualShareChange('myself', e.target.value)}
+                          />
+                        ) : (
+                          formData.includeMyself && splitMode === 'equal' && splitPreview?.shares['myself'] !== undefined && (
+                            <span className="text-sm font-medium text-orange-300">₹{splitPreview.shares['myself'].toFixed(2)}</span>
+                          )
+                        )}
+                        {formData.includeMyself && splitMode === 'equal' && <Check className="w-4 h-4 text-orange-400" />}
+                      </div>
+                    </div>
+
+                    {/* Friends */}
+                    {friends.map(friend => (
+                      <div key={friend.id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${formData.selectedFriendIds.includes(friend.id) ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5 border-white/10'} border`}>
+                        <div 
+                          className="flex items-center gap-2 flex-1 cursor-pointer"
+                          onClick={() => toggleFriend(friend.id)}
+                        >
+                          <Users className="w-4 h-4 text-blue-400" />
+                          <span>{friend.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {splitMode === 'manual' && formData.selectedFriendIds.includes(friend.id) ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              className="w-24 h-7 text-right bg-white/10 border-white/20 text-white"
+                              placeholder="0.00"
+                              value={manualShares[friend.id.toString()] || ''}
+                              onChange={(e) => handleManualShareChange(friend.id.toString(), e.target.value)}
+                            />
+                          ) : (
+                            formData.selectedFriendIds.includes(friend.id) && splitMode === 'equal' && splitPreview?.shares[friend.id.toString()] !== undefined && (
+                              <span className="text-sm font-medium text-blue-300">₹{splitPreview.shares[friend.id.toString()].toFixed(2)}</span>
+                            )
+                          )}
+                          {formData.selectedFriendIds.includes(friend.id) && splitMode === 'equal' && <Check className="w-4 h-4 text-blue-400" />}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!editingSplit && (
+                    <div className="pt-2">
+                      <Label htmlFor="customName" className="text-xs text-gray-400">Or add a one-time name</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          id="customName"
+                          value={formData.customFriendName}
+                          onChange={(e) => setFormData({ ...formData, customFriendName: e.target.value })}
+                          className="bg-white/10 border-white/20 text-white flex-1"
+                          placeholder="Enter name..."
+                        />
+                        {splitMode === 'manual' && formData.customFriendName && (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="w-24 bg-white/10 border-white/20 text-white text-right"
+                            placeholder="0.00"
+                            value={manualShares['custom'] || ''}
+                            onChange={(e) => handleManualShareChange('custom', e.target.value)}
+                          />
+                        )}
+                        {splitMode === 'equal' && formData.customFriendName && splitPreview?.shares['custom'] !== undefined && (
+                          <div className="flex items-center px-3 bg-white/5 border border-white/10 rounded-md text-sm text-gray-300">
+                            ₹{splitPreview.shares['custom'].toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="description" className="text-gray-300">What's this for?</Label>
                   <Textarea
@@ -235,11 +349,24 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                 </div>
 
                 {splitPreview && (
-                  <Card className="bg-orange-500/10 border-orange-500/20">
+                  <Card className={`border ${splitPreview.isValid ? 'bg-orange-500/10 border-orange-500/20' : 'bg-red-500/10 border-red-500/30'}`}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-300">Split between {splitPreview.peopleCount} people:</span>
-                        <span className="text-orange-400 font-bold">₹{splitPreview.share.toFixed(2)} each</span>
+                        {splitMode === 'equal' ? (
+                          <>
+                            <span className="text-gray-300">Split between {splitPreview.peopleCount} people:</span>
+                            <span className="text-orange-400 font-bold">Total ₹{splitPreview.totalAssigned.toFixed(2)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className={splitPreview.isValid ? 'text-gray-300' : 'text-red-400'}>
+                              {splitPreview.isValid ? 'Manual split balanced:' : `Balance remaining: ₹${(parseFloat(formData.amount || '0') - splitPreview.totalAssigned).toFixed(2)}`}
+                            </span>
+                            <span className={`${splitPreview.isValid ? 'text-orange-400' : 'text-red-400'} font-bold`}>
+                              Assigned ₹{splitPreview.totalAssigned.toFixed(2)}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -249,8 +376,8 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
               <div className="flex gap-2">
                 <Button
                   type="submit"
-                  disabled={!splitPreview}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                  disabled={!splitPreview?.isValid}
+                  className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50"
                 >
                   {editingSplit ? 'Update Split' : 'Split Bill Now'}
                 </Button>
