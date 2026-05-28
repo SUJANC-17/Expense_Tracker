@@ -4,5 +4,5 @@ authtoken: 37f4FXEaK3kpr5AdneWTChJh9jJ_2vJrbXuRnjSmTSSByrdm8
 tunnels:
   proxy:
     proto: http
-    addr: 8080
+    addr: 3000
     hostname: elke-nonstrategic-shad.ngrok-free.dev

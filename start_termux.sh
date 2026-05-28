@@ -108,9 +108,10 @@ verify_ngrok_binary() {
     fi
     echo ""
     echo "ngrok cannot run on this Termux install (often: unexpected e_type: 2)."
-    echo "  - Install Termux from F-Droid, not Google Play"
+    echo "  - Install Termux from F-Droid, not Google Play (see TERMUX.md)"
     echo "  - Remove broken binary: rm -f $NGROK_DIR/ngrok && re-run this script"
     echo "  - Or use local-only mode: SKIP_NGROK=1 ./start_termux.sh"
+    rm -f "$NGROK_DIR/ngrok" 2>/dev/null || true
     echo ""
     return 1
 }

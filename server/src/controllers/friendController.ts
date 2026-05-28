@@ -2,14 +2,16 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { getUserTableName } from '../utils/tableUtils.js';
+import { createUserTables } from '../models/userSchema.js';
 
 // Get all friends for user
 export const getFriends = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
+        createUserTables(uid);
         const tableName = getUserTableName(uid, 'friends');
         const rows = db.prepare(
-            `SELECT * FROM \`${tableName}\` ORDER BY name ASC`
+            `SELECT * FROM "${tableName}" ORDER BY name ASC`
         ).all();
         res.json(rows);
     } catch (error) {
@@ -29,9 +31,10 @@ export const addFriend = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        createUserTables(uid);
         const tableName = getUserTableName(uid, 'friends');
         const result = db.prepare(
-            `INSERT INTO \`${tableName}\` (name) VALUES (?)`
+            `INSERT INTO "${tableName}" (name) VALUES (?)`
         ).run(name);
         res.status(201).json({ id: Number(result.lastInsertRowid), name, message: 'Friend added successfully' });
     } catch (error: any) {
@@ -50,11 +53,12 @@ export const deleteFriend = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        createUserTables(uid);
         const tableName = getUserTableName(uid, 'friends');
 
         // Prevent deleting 'Myself'
         const friend = db.prepare(
-            `SELECT name FROM \`${tableName}\` WHERE id = ?`
+            `SELECT name FROM "${tableName}" WHERE id = ?`
         ).get(id) as any;
 
         if (friend && friend.name === 'Myself') {
@@ -63,7 +67,7 @@ export const deleteFriend = (req: AuthRequest, res: Response): void => {
         }
 
         const result = db.prepare(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`
+            `DELETE FROM "${tableName}" WHERE id = ?`
         ).run(id);
 
         if (result.changes === 0) {

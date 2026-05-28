@@ -2,10 +2,23 @@ import initSqlJs from 'sql.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const dbPath = process.env.DB_PATH || './data/expense_tracker.db';
+const TERMUX_DB_PATH = '/sdcard/Documents/ExpenseTracker/expense_tracker.db';
+
+function resolveDefaultDbPath(): string {
+    const onTermux =
+        typeof process.env.TERMUX_VERSION === 'string' ||
+        (process.env.PREFIX ?? '').includes('com.termux');
+    if (onTermux) {
+        return TERMUX_DB_PATH;
+    }
+    return './data/expense_tracker.db';
+}
+
+const dbPath = process.env.DB_PATH || resolveDefaultDbPath();
 const dbDir = path.dirname(dbPath);
 
 // Ensure the directory exists
@@ -17,10 +30,13 @@ if (!fs.existsSync(dbDir)) {
     }
 }
 
-// Load sql.js
+// Load sql.js (explicit WASM path for Termux/Node ESM)
 // @ts-ignore
 const initSqlJsFn = (initSqlJs.default || initSqlJs) as typeof initSqlJs;
-const SQL = await initSqlJsFn();
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const wasmPath = path.join(configDir, '../../node_modules/sql.js/dist/sql-wasm.wasm');
+const sqlJsOptions = fs.existsSync(wasmPath) ? { locateFile: () => wasmPath } : {};
+const SQL = await initSqlJsFn(sqlJsOptions);
 
 // Load DB from file if it exists, otherwise start with empty DB
 let dbData: Buffer | undefined = undefined;
@@ -51,7 +67,11 @@ function saveDatabase() {
 
 // Wrapper for Prepared Statement to match better-sqlite3 API
 class WrappedStatement {
-    constructor(private sql: string, private sqlJsDb: any, private saveFn: () => void) {}
+    constructor(
+        private sql: string,
+        private sqlJsDb: any,
+        private persist: () => void
+    ) {}
 
     all(...args: any[]): any[] {
         const stmt = this.sqlJsDb.prepare(this.sql);
@@ -128,8 +148,7 @@ class WrappedStatement {
             lastIdStmt.free();
         }
 
-        // Persist write immediately to file
-        this.saveFn();
+        this.persist();
 
         return { changes, lastInsertRowid };
     }
@@ -137,38 +156,51 @@ class WrappedStatement {
 
 // Wrapper for the Database connection itself to match better-sqlite3 API
 class WrappedDatabase {
+    private transactionDepth = 0;
+
     constructor(private sqlJsDb: any, private saveFn: () => void) {}
 
+    private persistIfIdle(): void {
+        if (this.transactionDepth === 0) {
+            this.saveFn();
+        }
+    }
+
     prepare(sql: string) {
-        return new WrappedStatement(sql, this.sqlJsDb, this.saveFn);
+        return new WrappedStatement(sql, this.sqlJsDb, () => this.persistIfIdle());
     }
 
     transaction(fn: (...args: any[]) => any) {
         return (...args: any[]) => {
+            this.transactionDepth++;
             this.sqlJsDb.run('BEGIN TRANSACTION;');
             try {
                 const result = fn(...args);
                 this.sqlJsDb.run('COMMIT;');
-                this.saveFn();
                 return result;
             } catch (error) {
                 try {
                     this.sqlJsDb.run('ROLLBACK;');
                 } catch (_) {}
                 throw error;
+            } finally {
+                this.transactionDepth--;
+                if (this.transactionDepth === 0) {
+                    this.saveFn();
+                }
             }
         };
     }
 
     exec(sql: string): this {
-        this.sqlJsDb.run(sql);
-        this.saveFn();
+        this.sqlJsDb.exec(sql);
+        this.persistIfIdle();
         return this;
     }
 
     pragma(pragmaString: string) {
         this.sqlJsDb.run(`PRAGMA ${pragmaString};`);
-        this.saveFn();
+        this.persistIfIdle();
     }
 
     close() {

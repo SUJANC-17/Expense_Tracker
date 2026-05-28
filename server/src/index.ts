@@ -1,15 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
-const dbDir = '/sdcard/Documents/ExpenseTracker';
-if (!fs.existsSync(dbDir)) {
-    try {
-        fs.mkdirSync(dbDir, { recursive: true });
-    } catch (err) {
-        console.error('Failed to create DB directory:', err);
-    }
-}
-
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -31,7 +19,8 @@ import type { AuthRequest } from './middleware/auth.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware
 app.use(cors());
@@ -92,8 +81,8 @@ app.post('/api/reports/generate', authenticateToken, async (req: AuthRequest, re
 
 // Start server
 try {
-    const server = app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
+    const server = app.listen(PORT, HOST, () => {
+        console.log(`Server is running on http://${HOST}:${PORT}`);
     });
     server.on('error', (e) => console.error('Server error:', e));
 } catch (e) {
