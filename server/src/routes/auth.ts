@@ -24,13 +24,8 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
             createUserTables(uid);
             res.json({ message: 'User authenticated', uid });
 
-            // Send login notification only if inactive for > 1 hour to prevent spam on page refresh
             if (email) {
-                const lastActive = existing.last_active_at ? new Date(existing.last_active_at + 'Z').getTime() : 0; // Append Z to parse as UTC/localtime correctly or handle via Date
-                const now = new Date().getTime();
-                if (!existing.last_active_at || (now - lastActive > 60 * 60 * 1000) || isNaN(lastActive)) {
-                    sendLoginNotification(email).catch(console.error);
-                }
+                sendLoginNotification(email).catch(console.error);
             }
             return;
         }
