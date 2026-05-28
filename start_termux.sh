@@ -76,10 +76,16 @@ echo "Starting frontend (Vite) on port 5173..."
 (cd client && npm run dev -- --host 0.0.0.0) &
 CLIENT_PID=$!
 
+echo "Starting Serveo tunnel on port 5173..."
+ssh -o StrictHostKeyChecking=accept-new -R sujan-expense-tracker:80:localhost:5173 serveo.net &
+SERVEO_PID=$!
+
 echo ""
 echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
 echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
+echo "Serveo PID:   $SERVEO_PID"
+echo "Public URL:   https://sujan-expense-tracker.serveo.net"
 echo "Database:     $DB_PATH"
 echo ""
 echo "Open the frontend URL shown in the Vite output above (often http://127.0.0.1:5173)."
@@ -88,8 +94,8 @@ echo ""
 
 cleanup() {
     echo "Stopping services..."
-    kill "$SERVER_PID" "$CLIENT_PID" 2>/dev/null || true
+    kill "$SERVER_PID" "$CLIENT_PID" "$SERVEO_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-wait $SERVER_PID $CLIENT_PID
+wait $SERVER_PID $CLIENT_PID $SERVEO_PID
