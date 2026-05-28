@@ -37,13 +37,14 @@ export const createUserTables = (uid: string): void => {
                 CREATE TABLE IF NOT EXISTS "${friendTable}" (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
                     UNIQUE(name)
                 )
             `);
 
-            // Ensure "Myself" profile exists
-            db.prepare(`INSERT OR IGNORE INTO "${friendTable}" (name) VALUES ('Myself')`).run();
+            // We no longer insert "Myself" into the DB to prevent duplicates.
+            // The frontend handles the "Myself" logic virtually.
+            // db.prepare(`INSERT OR IGNORE INTO "${friendTable}" (name) VALUES ('Myself')`).run();
 
             // Create user-specific incomes table
             db.exec(`
@@ -53,7 +54,7 @@ export const createUserTables = (uid: string): void => {
                     source TEXT NOT NULL,
                     description TEXT,
                     date TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
                 )
             `);
 
@@ -65,7 +66,7 @@ export const createUserTables = (uid: string): void => {
                     category_id INTEGER NOT NULL,
                     description TEXT,
                     date TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
                     FOREIGN KEY (category_id) REFERENCES categories(id)
                 )
             `);
@@ -81,7 +82,7 @@ export const createUserTables = (uid: string): void => {
                     is_paid INTEGER DEFAULT 0,
                     paid_at DATETIME NULL,
                     date TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
                     FOREIGN KEY (friend_id) REFERENCES "${friendTable}"(id) ON DELETE SET NULL
                 )
             `);

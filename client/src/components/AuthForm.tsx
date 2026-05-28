@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, CheckSquare, Square } from 'lucide-react';
+import { PrivacyPolicy } from './PrivacyPolicy';
 
 interface AuthFormProps {
   onLoginWithGoogle: () => Promise<void>;
@@ -10,6 +11,8 @@ interface AuthFormProps {
 export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setError('');
@@ -44,8 +47,8 @@ export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
           )}
           <Button
             onClick={handleGoogleSignIn}
-            className="w-full bg-white hover:bg-gray-100 text-gray-900 border border-gray-300"
-            disabled={loading}
+            className={`w-full ${acceptedTerms ? 'bg-white hover:bg-gray-100 text-gray-900' : 'bg-white/50 text-gray-500 cursor-not-allowed'} border border-gray-300`}
+            disabled={loading || !acceptedTerms}
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
               <path
@@ -67,11 +70,26 @@ export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
             </svg>
             {loading ? 'Signing in...' : 'Sign in with Google'}
           </Button>
-          <p className="text-xs text-gray-400 text-center mt-4">
-            By signing in, you agree to use this expense tracker to manage your personal finances
-          </p>
+          
+          <div className="flex items-start gap-3 mt-4 text-left p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setAcceptedTerms(!acceptedTerms)}>
+            <div className="mt-0.5 text-purple-400">
+              {acceptedTerms ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+            </div>
+            <p className="text-sm text-gray-300 select-none">
+              I have read and agree to the{' '}
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowPolicy(true); }}
+                className="text-purple-400 hover:text-purple-300 underline underline-offset-2 decoration-purple-500/50"
+              >
+                Privacy Policy
+              </button>
+            </p>
+          </div>
         </CardContent>
       </Card>
+
+      {showPolicy && <PrivacyPolicy onClose={() => setShowPolicy(false)} />}
     </div>
   );
 }

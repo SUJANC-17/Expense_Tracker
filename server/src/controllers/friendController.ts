@@ -11,7 +11,7 @@ export const getFriends = (req: AuthRequest, res: Response): void => {
         createUserTables(uid);
         const tableName = getUserTableName(uid, 'friends');
         const rows = db.prepare(
-            `SELECT * FROM "${tableName}" ORDER BY name ASC`
+            `SELECT * FROM "${tableName}" WHERE name != 'Myself' ORDER BY name ASC`
         ).all();
         res.json(rows);
     } catch (error) {
