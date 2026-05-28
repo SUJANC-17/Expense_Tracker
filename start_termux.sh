@@ -12,9 +12,10 @@ echo "--- Expense Tracker Termux Setup ---"
 
 stop_stale_services() {
     echo "Stopping leftover processes from previous runs..."
-    pkill -f "Expense_Tracker/server.*tsx watch" 2>/dev/null || true
-    pkill -f "Expense_Tracker/client.*vite" 2>/dev/null || true
-    pkill -f "tsx watch src/index.ts" 2>/dev/null || true
+    # Force kill any stuck node, tsx, or ssh processes
+    killall -9 node 2>/dev/null || true
+    killall -9 ssh 2>/dev/null || true
+    pkill -f "Expense_Tracker" 2>/dev/null || true
 
     if command -v lsof >/dev/null 2>&1; then
         for port in "$PORT" 5173 5174 5175 5176 5177; do
@@ -77,6 +78,12 @@ echo "Starting frontend (Vite) on port 5173..."
 CLIENT_PID=$!
 
 echo "Starting Serveo tunnel on port 5173..."
+# Ensure an SSH key exists so Serveo grants the custom subdomain
+if [ ! -f ~/.ssh/id_rsa ]; then
+    echo "Generating SSH key for Serveo..."
+    ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa >/dev/null 2>&1
+fi
+
 ssh -o StrictHostKeyChecking=accept-new -R sujan-expense-tracker:80:localhost:5173 serveo.net &
 SERVEO_PID=$!
 
