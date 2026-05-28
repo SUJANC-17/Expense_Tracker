@@ -39,9 +39,9 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
   const splitPreview = useMemo(() => {
     const totalAmount = parseFloat(formData.amount) || 0;
     const selectedPeople = [
-      ...(formData.includeMyself ? ['myself'] : []),
       ...formData.selectedFriendIds.map(id => id.toString()),
-      ...(formData.customFriendName ? ['custom'] : [])
+      ...(formData.customFriendName ? ['custom'] : []),
+      ...(formData.includeMyself ? ['myself'] : []),
     ];
     
     const peopleCount = selectedPeople.length;
@@ -66,12 +66,35 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
       };
     } else {
       let totalAssigned = 0;
+      let blankCount = 0;
       const shares: Record<string, number> = {};
+      
       selectedPeople.forEach(person => {
-        const amt = parseFloat(manualShares[person]) || 0;
-        shares[person] = amt;
-        totalAssigned += amt;
+        const val = manualShares[person];
+        if (val === undefined || val === '') {
+          blankCount++;
+        } else {
+          const amt = parseFloat(val) || 0;
+          shares[person] = amt;
+          totalAssigned += amt;
+        }
       });
+
+      if (blankCount > 0) {
+        const remaining = Math.max(0, totalAmount - totalAssigned);
+        const baseShare = Math.floor((remaining / blankCount) * 100) / 100;
+        const remainder = Math.round((remaining - baseShare * blankCount) * 100);
+        
+        let blankIndex = 0;
+        selectedPeople.forEach(person => {
+          const val = manualShares[person];
+          if (val === undefined || val === '') {
+            shares[person] = baseShare + (blankIndex < remainder ? 0.01 : 0);
+            totalAssigned += shares[person];
+            blankIndex++;
+          }
+        });
+      }
       
       const isValid = Math.abs(totalAmount - totalAssigned) < 0.01;
       return {
@@ -262,7 +285,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                             type="number"
                             step="0.01"
                             className="w-24 h-7 text-right bg-white/10 border-white/20 text-white"
-                            placeholder="0.00"
+                            placeholder={splitPreview?.shares['myself'] !== undefined && manualShares['myself'] === undefined ? splitPreview.shares['myself'].toFixed(2) : "0.00"}
                             value={manualShares['myself'] || ''}
                             onChange={(e) => handleManualShareChange('myself', e.target.value)}
                           />
@@ -291,7 +314,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                               type="number"
                               step="0.01"
                               className="w-24 h-7 text-right bg-white/10 border-white/20 text-white"
-                              placeholder="0.00"
+                              placeholder={splitPreview?.shares[friend.id.toString()] !== undefined && manualShares[friend.id.toString()] === undefined ? splitPreview.shares[friend.id.toString()].toFixed(2) : "0.00"}
                               value={manualShares[friend.id.toString()] || ''}
                               onChange={(e) => handleManualShareChange(friend.id.toString(), e.target.value)}
                             />
@@ -322,7 +345,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
                             type="number"
                             step="0.01"
                             className="w-24 bg-white/10 border-white/20 text-white text-right"
-                            placeholder="0.00"
+                            placeholder={splitPreview?.shares['custom'] !== undefined && manualShares['custom'] === undefined ? splitPreview.shares['custom'].toFixed(2) : "0.00"}
                             value={manualShares['custom'] || ''}
                             onChange={(e) => handleManualShareChange('custom', e.target.value)}
                           />
