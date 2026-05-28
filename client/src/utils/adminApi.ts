@@ -10,7 +10,6 @@ export const adminApi = {
         const response = await fetch(`${API_URL}${endpoint}`, {
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
         });
         if (!response.ok) {
@@ -30,7 +29,6 @@ export const adminApi = {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
             body: JSON.stringify(data),
         });
@@ -47,7 +45,6 @@ export const adminApi = {
             method: 'DELETE',
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
         });
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
