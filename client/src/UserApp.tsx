@@ -18,12 +18,12 @@ import {
 import {
     LayoutDashboard,
     TrendingUp,
+    TrendingDown,
     Users,
     FileText,
     UserPlus,
     LogOut,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 
 type TabValue =
