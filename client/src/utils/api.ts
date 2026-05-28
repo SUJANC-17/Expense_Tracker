@@ -26,7 +26,6 @@ export const apiClient = {
         const response = await fetch(`${API_URL}${endpoint}`, {
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
         });
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
@@ -40,7 +39,6 @@ export const apiClient = {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
             body: JSON.stringify(data),
         });
@@ -58,7 +56,6 @@ export const apiClient = {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
             body: JSON.stringify(data),
         });
@@ -72,7 +69,6 @@ export const apiClient = {
             method: 'DELETE',
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',
-                'ngrok-skip-browser-warning': 'true',
             },
         });
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
