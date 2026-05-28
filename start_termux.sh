@@ -84,7 +84,7 @@ if [ ! -f ~/.ssh/id_rsa ]; then
     ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa >/dev/null 2>&1
 fi
 
-ssh -o StrictHostKeyChecking=accept-new -R sujan-expense-tracker:80:localhost:5173 serveo.net &
+ssh -o StrictHostKeyChecking=accept-new -R expense-tracker:80:localhost:5173 serveo.net &
 SERVEO_PID=$!
 
 echo ""
@@ -92,7 +92,7 @@ echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
 echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
 echo "Serveo PID:   $SERVEO_PID"
-echo "Public URL:   https://sujan-expense-tracker.serveo.net"
+echo "Public URL:   https://expense-tracker.serveo.net"
 echo "Database:     $DB_PATH"
 echo ""
 echo "Open the frontend URL shown in the Vite output above (often http://127.0.0.1:5173)."
