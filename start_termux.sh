@@ -81,7 +81,7 @@ echo "Fixing TSX permissions..."
 chmod +x server/node_modules/.bin/tsx 2>/dev/null || true
 
 echo "Starting Serveo tunnel on port 5173..."
-ssh -o StrictHostKeyChecking=accept-new -R expense:80:localhost:5173 serveo.net &
+ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=60 -R expense:80:localhost:5173 serveo.net &
 SERVEO_PID=$!
 
 echo ""
