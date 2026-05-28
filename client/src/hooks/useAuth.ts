@@ -18,7 +18,9 @@ export const useAuth = () => {
                 };
                 setUser(appUser);
                 // Register/Login in backend
-                apiClient.post('/auth/register', {}).catch(err => console.error('Silent registration error:', err));
+                const isNewSession = !sessionStorage.getItem('session_synced');
+                apiClient.post('/auth/register', { isNewLogin: isNewSession }).catch(err => console.error('Silent registration error:', err));
+                sessionStorage.setItem('session_synced', 'true');
                 // Store user in localStorage for API authentication
                 localStorage.setItem('user', JSON.stringify(appUser));
             } else {
@@ -51,6 +53,7 @@ export const useAuth = () => {
         try {
             await signOut(auth);
             localStorage.removeItem('user');
+            sessionStorage.removeItem('session_synced');
             setUser(null);
         } catch (error) {
             console.error('Error signing out:', error);

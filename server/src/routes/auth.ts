@@ -11,6 +11,7 @@ const router = express.Router();
 router.post('/register', authenticateToken, (req: AuthRequest, res) => {
     try {
         const { uid, email } = req.user!;
+        const { isNewLogin } = req.body;
 
         // Check if user exists by ID or Email (in case Firebase UID changed for the same email)
         const existing = db.prepare('SELECT id, last_active_at FROM users WHERE id = ? OR email = ?').get(uid, email) as any;
@@ -24,7 +25,7 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
             createUserTables(uid);
             res.json({ message: 'User authenticated', uid });
 
-            if (email) {
+            if (email && isNewLogin) {
                 sendLoginNotification(email).catch(console.error);
             }
             return;
@@ -40,7 +41,7 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
 
         res.status(201).json({ message: 'User registered successfully', uid });
         
-        if (email) {
+        if (email && isNewLogin) {
             sendLoginNotification(email).catch(console.error);
         }
     } catch (error) {
