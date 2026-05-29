@@ -94,11 +94,22 @@ echo "Starting Serveo tunnel on port 5173 with auto-restart..."
 ) &
 SERVEO_PID=$!
 
+echo "Starting Serveo keepalive pinger..."
+(
+    set +e
+    while true; do
+        sleep 30
+        curl -s --max-time 5 https://expense.serveousercontent.com > /dev/null 2>&1
+    done
+) &
+PINGER_PID=$!
+
 echo ""
 echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
 echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
 echo "Serveo PID:   $SERVEO_PID"
+echo "Pinger PID:   $PINGER_PID"
 echo "Public URL:   https://expense.serveousercontent.com"
 echo "Database:     $DB_PATH"
 echo ""
@@ -107,8 +118,8 @@ echo ""
 
 cleanup() {
     echo "Stopping services..."
-    kill "$SERVER_PID" "$CLIENT_PID" "$SERVEO_PID" 2>/dev/null || true
+    kill "$SERVER_PID" "$CLIENT_PID" "$SERVEO_PID" "$PINGER_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-wait $SERVER_PID $CLIENT_PID $SERVEO_PID
+wait $SERVER_PID $CLIENT_PID $SERVEO_PID $PINGER_PID
