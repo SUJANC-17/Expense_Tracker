@@ -81,6 +81,7 @@ chmod +x server/node_modules/.bin/tsx 2>/dev/null || true
 
 echo "Starting Serveo tunnel on port 5173 with auto-restart..."
 (
+    set +e
     while true; do
         ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -R expense:80:localhost:5173 serveo.net
         echo "Tunnel dropped. Restarting in 5 seconds..."
