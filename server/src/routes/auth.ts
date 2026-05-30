@@ -3,7 +3,8 @@ import { authenticateToken } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { createUserTables } from '../models/userSchema.js';
-import { sendLoginNotification } from '../services/emailService.js';
+import admin from '../config/firebase.js';
+import { sendLoginNotification, sendPasswordResetEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -61,6 +62,40 @@ router.post('/login', authenticateToken, async (req: AuthRequest, res) => {
     } catch (error) {
         console.error('Error sending login notification:', error);
         res.status(500).json({ error: 'Failed to send login notification' });
+    }
+});
+
+// Send password reset email using Firebase-generated reset link and existing SMTP transport
+router.post('/password-reset', async (req, res) => {
+    const { email } = req.body ?? {};
+
+    if (!email || typeof email !== 'string') {
+        res.status(400).json({ error: 'Email is required' });
+        return;
+    }
+
+    try {
+        const resetLink = await admin.auth().generatePasswordResetLink(email.trim());
+        await sendPasswordResetEmail(email.trim(), resetLink);
+
+        res.json({
+            message: 'Password reset email sent',
+        });
+    } catch (error: any) {
+        console.error('Error sending password reset email:', error);
+
+        const code = error?.code || '';
+        if (code === 'auth/user-not-found') {
+            res.status(404).json({ error: 'No account found with this email. Please sign up.' });
+            return;
+        }
+
+        if (code === 'auth/invalid-email') {
+            res.status(400).json({ error: 'Please enter a valid email address.' });
+            return;
+        }
+
+        res.status(500).json({ error: 'Failed to send password reset email' });
     }
 });
 

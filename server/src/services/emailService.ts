@@ -106,6 +106,44 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
   }
 };
 
+export const sendPasswordResetEmail = async (email: string, resetLink: string): Promise<void> => {
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to: email,
+      subject: 'Expense Tracker Password Reset',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #7c3aed; color: white; padding: 20px; text-align: center;">
+            <h2 style="margin: 0;">Expense Tracker Password Reset</h2>
+          </div>
+          <div style="padding: 30px; color: #1e293b;">
+            <p>Hello,</p>
+            <p>We received a request to reset your Expense Tracker password.</p>
+            <p>
+              <a href="${resetLink}" style="display:inline-block;background-color:#7c3aed;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:bold;">
+                Reset Your Password
+              </a>
+            </p>
+            <p>If the button does not work, copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #4c1d95;">${resetLink}</p>
+            <p style="margin-top: 20px; font-weight: bold; color: #7f1d1d;">
+              If you did not request this reset, you can safely ignore this email.
+            </p>
+          </div>
+          <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+            This is an automated system notification. Please do not reply.
+          </div>
+        </div>
+      `
+    });
+    console.log(`Password reset email sent to ${email}`);
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+    throw error;
+  }
+};
+
 export const sendInactivityDeletionNotice = async (
   email: string,
   data: any // Full data object
