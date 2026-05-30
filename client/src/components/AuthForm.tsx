@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../config/firebase';
-import { getFriendlyAuthError, getFriendlyResetError } from '../utils/authErrors';
+import { getFriendlyAuthError } from '../utils/authErrors';
+import { apiClient } from '../utils/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -85,10 +84,10 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
 
     setResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await apiClient.post('/auth/password-reset', { email });
       setResetSuccess('Password reset email sent. Please check your inbox.');
     } catch (error) {
-      setResetError(getFriendlyResetError(error));
+      setResetError(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {
       setResetLoading(false);
     }
