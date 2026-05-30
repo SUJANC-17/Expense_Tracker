@@ -9,6 +9,9 @@ function monthTotals(uid: string, year: string, month: string) {
     const expense = db.prepare(
         "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?"
     ).get(uid, year, month) as any;
+    const splitExpense = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?"
+    ).get(uid, year, month) as any;
     const splitIncome = db.prepare(
         "SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 1 AND strftime('%Y', paid_at) = ? AND strftime('%m', paid_at) = ?"
     ).get(uid, year, month) as any;
@@ -16,6 +19,7 @@ function monthTotals(uid: string, year: string, month: string) {
     return {
         income: Number(income?.total || 0),
         expense: Number(expense?.total || 0),
+        splitExpense: Number(splitExpense?.total || 0),
         splitIncome: Number(splitIncome?.total || 0),
     };
 }
@@ -23,9 +27,10 @@ function monthTotals(uid: string, year: string, month: string) {
 function allTimeBalance(uid: string): number {
     const income = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM incomes WHERE user_id = ?').get(uid) as any;
     const expense = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ?').get(uid) as any;
+    const splitExpense = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ?').get(uid) as any;
     const splitIncome = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 1').get(uid) as any;
 
-    return Number(income?.total || 0) - Number(expense?.total || 0) + Number(splitIncome?.total || 0);
+    return Number(income?.total || 0) - Number(expense?.total || 0) - Number(splitExpense?.total || 0) + Number(splitIncome?.total || 0);
 }
 
 function summaryPayload(uid: string, year: string, month: string) {
@@ -40,13 +45,14 @@ function summaryPayload(uid: string, year: string, month: string) {
     const unpaid = db.prepare(
         'SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 0'
     ).get(uid) as any;
+    const totalExpense = totals.expense + totals.splitExpense;
 
     return {
         year: Number(year),
         month: Number(month),
         total_income: totals.income,
-        total_expense: totals.expense,
-        balance: totals.income - totals.expense + totals.splitIncome,
+        total_expense: totalExpense,
+        balance: totals.income - totalExpense + totals.splitIncome,
         all_time_balance: allTimeBalance(uid),
         expenses_by_category: expensesByCategory,
         total_unpaid_splits: Number(unpaid?.total || 0),
@@ -126,12 +132,13 @@ export const getTrends = (req: AuthRequest, res: Response): void => {
             const year = date.getFullYear().toString();
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
             const totals = monthTotals(uid, year, month);
+            const expense = totals.expense + totals.splitExpense;
             trends.push({
                 year: Number(year),
                 month: Number(month),
                 income: totals.income,
-                expense: totals.expense,
-                balance: totals.income - totals.expense + totals.splitIncome,
+                expense,
+                balance: totals.income - expense + totals.splitIncome,
             });
         }
 
