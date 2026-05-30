@@ -11,37 +11,38 @@ const router = express.Router();
 router.post('/register', authenticateToken, (req: AuthRequest, res) => {
     try {
         const { uid, email } = req.user!;
-        const { isNewLogin } = req.body;
+        const { notifyLogin, username } = req.body;
 
         // Check if user exists by ID or Email (in case Firebase UID changed for the same email)
-        const existing = db.prepare('SELECT id, last_active_at FROM users WHERE id = ? OR email = ?').get(uid, email) as any;
+        const existing = db.prepare('SELECT id, username, last_active_at FROM users WHERE id = ? OR email = ?').get(uid, email) as any;
 
         if (existing) {
-            // Update last_active_at, jwt_id, and id (to ensure it matches current Firebase UID)
+            // Update last_active_at and id to ensure it matches current Firebase UID.
             db.prepare(
-                "UPDATE users SET id = ?, last_active_at = DATETIME('now', 'localtime'), jwt_id = ? WHERE email = ?"
-            ).run(uid, uid, email);
+                "UPDATE users SET id = ?, username = COALESCE(?, username), last_active_at = DATETIME('now', 'localtime') WHERE email = ?"
+            ).run(uid, username || null, email);
             // Ensure tables exist for existing users too
             createUserTables(uid);
-            res.json({ message: 'User authenticated', uid });
+            const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(uid);
+            res.json({ message: 'User authenticated', user });
 
-            if (email && isNewLogin) {
+            if (email && notifyLogin) {
                 sendLoginNotification(email).catch(console.error);
             }
             return;
         }
 
-        // Create new user with jwt_id
         db.prepare(
-            'INSERT INTO users (id, email, jwt_id) VALUES (?, ?, ?)'
-        ).run(uid, email, uid);
+            'INSERT INTO users (id, username, email) VALUES (?, ?, ?)'
+        ).run(uid, username || email?.split('@')[0] || null, email);
 
         // Create user-specific tables
         createUserTables(uid);
 
-        res.status(201).json({ message: 'User registered successfully', uid });
+        const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(uid);
+        res.status(201).json({ message: 'User registered successfully', user });
         
-        if (email && isNewLogin) {
+        if (email && notifyLogin) {
             sendLoginNotification(email).catch(console.error);
         }
     } catch (error) {

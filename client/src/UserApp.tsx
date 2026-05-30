@@ -1,13 +1,7 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { useData } from "./hooks/useData";
 import { AuthForm } from "./components/AuthForm";
-import { Dashboard } from "./components/Dashboard";
-import { IncomeManager } from "./components/IncomeManager";
-import { ExpenseManager } from "./components/ExpenseManager";
-import { SplitManager } from "./components/SplitManager";
-import { FriendsManager } from "./components/FriendsManager";
-import { Reports } from "./components/Reports";
 import { Button } from "./components/ui/button";
 import {
     Tabs,
@@ -26,6 +20,13 @@ import {
 } from "lucide-react";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 
+const Dashboard = lazy(() => import("./components/Dashboard").then((module) => ({ default: module.Dashboard })));
+const IncomeManager = lazy(() => import("./components/IncomeManager").then((module) => ({ default: module.IncomeManager })));
+const ExpenseManager = lazy(() => import("./components/ExpenseManager").then((module) => ({ default: module.ExpenseManager })));
+const SplitManager = lazy(() => import("./components/SplitManager").then((module) => ({ default: module.SplitManager })));
+const FriendsManager = lazy(() => import("./components/FriendsManager").then((module) => ({ default: module.FriendsManager })));
+const Reports = lazy(() => import("./components/Reports").then((module) => ({ default: module.Reports })));
+
 type TabValue =
     | "dashboard"
     | "income"
@@ -35,7 +36,7 @@ type TabValue =
 
 export default function UserApp() {
     console.log("UserApp component initializing...");
-    const { user, loading, loginWithGoogle, logout } = useAuth();
+    const { user, loading, login, signup, loginWithGoogle, logout } = useAuth();
     console.log("Auth state:", { user: !!user, loading });
 
     const {
@@ -73,7 +74,7 @@ export default function UserApp() {
     }
 
     if (!user) {
-        return <AuthForm onLoginWithGoogle={loginWithGoogle} />;
+        return <AuthForm onLogin={login} onSignup={signup} onLoginWithGoogle={loginWithGoogle} />;
     }
 
     return (
@@ -90,10 +91,7 @@ export default function UserApp() {
                     <div>
                         <h1 className="text-white mb-1">Expense Tracker</h1>
                         <div className="flex items-center gap-2">
-                            <p className="text-gray-400">{user.email}</p>
-                            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
-                                Table ID: {user.id.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().substring(0, 8)}...
-                            </span>
+                            <p className="text-gray-400">{user.username}</p>
                         </div>
                     </div>
                     <Button
@@ -158,62 +156,64 @@ export default function UserApp() {
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="dashboard" className="mt-0">
-                        <Dashboard
-                            incomes={incomes}
-                            expenses={expenses}
-                            splits={splits}
-                        />
-                    </TabsContent>
+                    <Suspense fallback={<SkeletonLoader />}>
+                        <TabsContent value="dashboard" className="mt-0">
+                            <Dashboard
+                                incomes={incomes}
+                                expenses={expenses}
+                                splits={splits}
+                            />
+                        </TabsContent>
 
-                    <TabsContent value="income" className="mt-0">
-                        <IncomeManager
-                            incomes={incomes}
-                            userId={user.id}
-                            onAdd={addIncome}
-                            onUpdate={updateIncome}
-                            onDelete={deleteIncome}
-                        />
-                    </TabsContent>
+                        <TabsContent value="income" className="mt-0">
+                            <IncomeManager
+                                incomes={incomes}
+                                userId={user.id}
+                                onAdd={addIncome}
+                                onUpdate={updateIncome}
+                                onDelete={deleteIncome}
+                            />
+                        </TabsContent>
 
-                    <TabsContent value="expenses" className="mt-0">
-                        <ExpenseManager
-                            expenses={expenses}
-                            userId={user.id}
-                            onAdd={addExpense}
-                            onUpdate={updateExpense}
-                            onDelete={deleteExpense}
-                        />
-                    </TabsContent>
+                        <TabsContent value="expenses" className="mt-0">
+                            <ExpenseManager
+                                expenses={expenses}
+                                userId={user.id}
+                                onAdd={addExpense}
+                                onUpdate={updateExpense}
+                                onDelete={deleteExpense}
+                            />
+                        </TabsContent>
 
-                    <TabsContent value="splits" className="mt-0">
-                        <SplitManager
-                            splits={splits}
-                            userId={user.id}
-                            onAdd={addSplit}
-                            onAddBulk={addSplitBulk}
-                            onUpdate={updateSplit}
-                            onDelete={deleteSplit}
-                            onMarkPaid={markSplitPaid}
-                            friends={friends}
-                        />
-                    </TabsContent>
+                        <TabsContent value="splits" className="mt-0">
+                            <SplitManager
+                                splits={splits}
+                                userId={user.id}
+                                onAdd={addSplit}
+                                onAddBulk={addSplitBulk}
+                                onUpdate={updateSplit}
+                                onDelete={deleteSplit}
+                                onMarkPaid={markSplitPaid}
+                                friends={friends}
+                            />
+                        </TabsContent>
 
-                    <TabsContent value="friends" className="mt-0">
-                        <FriendsManager
-                            friends={friends}
-                            onAdd={addFriend}
-                            onDelete={deleteFriend}
-                        />
-                    </TabsContent>
+                        <TabsContent value="friends" className="mt-0">
+                            <FriendsManager
+                                friends={friends}
+                                onAdd={addFriend}
+                                onDelete={deleteFriend}
+                            />
+                        </TabsContent>
 
-                    <TabsContent value="reports" className="mt-0">
-                        <Reports
-                            incomes={incomes}
-                            expenses={expenses}
-                            splits={splits}
-                        />
-                    </TabsContent>
+                        <TabsContent value="reports" className="mt-0">
+                            <Reports
+                                incomes={incomes}
+                                expenses={expenses}
+                                splits={splits}
+                            />
+                        </TabsContent>
+                    </Suspense>
                 </Tabs>
             </div>
         </div>

@@ -1,18 +1,14 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
-import { getUserTableName } from '../utils/tableUtils.js';
-import { createUserTables } from '../models/userSchema.js';
 
 // Get all friends for user
 export const getFriends = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        createUserTables(uid);
-        const tableName = getUserTableName(uid, 'friends');
         const rows = db.prepare(
-            `SELECT * FROM "${tableName}" WHERE name != 'Myself' ORDER BY name ASC`
-        ).all();
+            "SELECT id, name, created_at FROM friends WHERE user_id = ? AND name != 'Myself' ORDER BY name ASC"
+        ).all(uid);
         res.json(rows);
     } catch (error) {
         console.error('Error fetching friends:', error);
@@ -31,11 +27,9 @@ export const addFriend = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        createUserTables(uid);
-        const tableName = getUserTableName(uid, 'friends');
         const result = db.prepare(
-            `INSERT INTO "${tableName}" (name) VALUES (?)`
-        ).run(name);
+            'INSERT INTO friends (user_id, name) VALUES (?, ?)'
+        ).run(uid, name);
         res.status(201).json({ id: Number(result.lastInsertRowid), name, message: 'Friend added successfully' });
     } catch (error: any) {
         if (error.message.includes('UNIQUE constraint failed')) {
@@ -53,13 +47,9 @@ export const deleteFriend = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        createUserTables(uid);
-        const tableName = getUserTableName(uid, 'friends');
-
-        // Prevent deleting 'Myself'
         const friend = db.prepare(
-            `SELECT name FROM "${tableName}" WHERE id = ?`
-        ).get(id) as any;
+            'SELECT name FROM friends WHERE id = ? AND user_id = ?'
+        ).get(id, uid) as any;
 
         if (friend && friend.name === 'Myself') {
             res.status(403).json({ error: 'Cannot delete the "Myself" profile' });
@@ -67,8 +57,8 @@ export const deleteFriend = (req: AuthRequest, res: Response): void => {
         }
 
         const result = db.prepare(
-            `DELETE FROM "${tableName}" WHERE id = ?`
-        ).run(id);
+            'DELETE FROM friends WHERE id = ? AND user_id = ?'
+        ).run(id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Friend not found' });

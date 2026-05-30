@@ -179,7 +179,16 @@ export const useData = (userId: string | undefined) => {
     };
 
     const markSplitPaid = async (id: number) => {
-        return updateSplit(id, { isPaid: true });
+        try {
+            const updated = await apiClient.put(`/splits/${id}/paid`, {});
+            setSplits(splits.map(s => s.id === id ? updated : s));
+            toast.success('Split marked as paid');
+            return updated;
+        } catch (error) {
+            console.error('Error marking split paid:', error);
+            toast.error('Failed to mark split paid');
+            throw error;
+        }
     };
 
     // Friend methods

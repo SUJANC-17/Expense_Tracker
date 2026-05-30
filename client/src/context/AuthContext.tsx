@@ -30,10 +30,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Register user in backend if new
             if (user) {
+                const notifyLogin = sessionStorage.getItem('login_notification_pending') === 'true' && !sessionStorage.getItem('session_synced');
                 try {
-                    await apiClient.post('/auth/register', {});
+                    await apiClient.post('/auth/register', { notifyLogin });
                 } catch (error) {
                     console.error('Error registering user:', error);
+                } finally {
+                    sessionStorage.removeItem('login_notification_pending');
+                    sessionStorage.setItem('session_synced', 'true');
                 }
             }
 
@@ -44,7 +48,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = async (email: string, password: string) => {
-        await signInWithEmailAndPassword(auth, email, password);
+        sessionStorage.setItem('login_notification_pending', 'true');
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            sessionStorage.removeItem('login_notification_pending');
+            throw error;
+        }
     };
 
     const signup = async (email: string, password: string) => {
@@ -53,11 +63,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const loginWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        sessionStorage.setItem('login_notification_pending', 'true');
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (error) {
+            sessionStorage.removeItem('login_notification_pending');
+            throw error;
+        }
     };
 
     const logout = async () => {
         await signOut(auth);
+        sessionStorage.removeItem('session_synced');
+        sessionStorage.removeItem('login_notification_pending');
     };
 
     return (

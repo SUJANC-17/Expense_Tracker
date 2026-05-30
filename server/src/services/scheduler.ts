@@ -2,7 +2,6 @@ import cron from 'node-cron';
 import db from '../config/db.js';
 import { generateMonthlyPDF } from './pdfService.js';
 import { sendMonthlyReport } from './emailService.js';
-import { getUserTableName } from '../utils/tableUtils.js';
 
 // Schedule to run on the 1st of every month at 9:00 AM
 export const startMonthlyReportScheduler = () => {
@@ -42,81 +41,77 @@ export const generateAndSendReport = async (
     year: number,
     month: number
 ): Promise<void> => {
-    const incomeTable = getUserTableName(userId, 'incomes');
-    const expenseTable = getUserTableName(userId, 'expenses');
-    const splitTable = getUserTableName(userId, 'splits');
-
     const yearStr = year.toString();
     const monthStr = month.toString().padStart(2, '0');
 
     // Get total income
     const incomeRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_income 
-         FROM \`${incomeTable}\` 
-         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
-    ).get(yearStr, monthStr) as any;
+         FROM incomes 
+         WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(userId, yearStr, monthStr) as any;
 
     // Get detailed income records
     const incomeDetails = db.prepare(
         `SELECT amount, source, description, date 
-         FROM \`${incomeTable}\` 
-         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?
+         FROM incomes 
+         WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?
          ORDER BY date DESC`
-    ).all(yearStr, monthStr) as any[];
+    ).all(userId, yearStr, monthStr) as any[];
 
     // Get total expenses
     const expenseRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_expense 
-         FROM \`${expenseTable}\` 
-         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
-    ).get(yearStr, monthStr) as any;
+         FROM expenses 
+         WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(userId, yearStr, monthStr) as any;
 
     // Get detailed expense records
     const expenseDetails = db.prepare(
         `SELECT e.amount, c.name as category, e.description, e.date 
-         FROM \`${expenseTable}\` e 
+         FROM expenses e 
          JOIN categories c ON e.category_id = c.id 
-         WHERE strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?
+         WHERE e.user_id = ? AND strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?
          ORDER BY e.date DESC`
-    ).all(yearStr, monthStr) as any[];
+    ).all(userId, yearStr, monthStr) as any[];
 
     // Get expenses by category
     const categoryRows = db.prepare(
         `SELECT c.name as category, COALESCE(SUM(e.amount), 0) as total 
-         FROM \`${expenseTable}\` e 
+         FROM expenses e 
          JOIN categories c ON e.category_id = c.id 
-         WHERE strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ? 
+         WHERE e.user_id = ? AND strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ? 
          GROUP BY c.name`
-    ).all(yearStr, monthStr) as any[];
+    ).all(userId, yearStr, monthStr) as any[];
 
     // Get income from settled splits for the month (Repayments)
     const splitIncomeRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_split_income 
-         FROM \`${splitTable}\` 
-         WHERE is_paid = 1 AND strftime('%Y', paid_at) = ? AND strftime('%m', paid_at) = ?`
-    ).get(yearStr, monthStr) as any;
+         FROM splits 
+         WHERE user_id = ? AND is_paid = 1 AND strftime('%Y', paid_at) = ? AND strftime('%m', paid_at) = ?`
+    ).get(userId, yearStr, monthStr) as any;
 
     // Get total upfront splits created in the month (Outgoing money)
     const splitExpenseRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_split_expense 
-         FROM \`${splitTable}\` 
-         WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?`
-    ).get(yearStr, monthStr) as any;
+         FROM splits 
+         WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+    ).get(userId, yearStr, monthStr) as any;
 
     // Get unpaid splits total
     const unpaidSplitsRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_unpaid 
-         FROM \`${splitTable}\` 
-         WHERE is_paid = 0`
-    ).get() as any;
+         FROM splits 
+         WHERE user_id = ? AND is_paid = 0`
+    ).get(userId) as any;
 
     // Get detailed unpaid splits
     const unpaidSplitsDetails = db.prepare(
         `SELECT friend_name, amount, description, date 
-         FROM \`${splitTable}\` 
-         WHERE is_paid = 0
+         FROM splits 
+         WHERE user_id = ? AND is_paid = 0
          ORDER BY date DESC`
-    ).all() as any[];
+    ).all(userId) as any[];
 
     const baseIncome = Number(incomeRows?.total_income || 0);
     const splitRepayments = Number(splitIncomeRows?.total_split_income || 0);

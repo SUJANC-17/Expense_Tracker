@@ -39,6 +39,23 @@ export const adminApi = {
         return response.json();
     },
 
+    async put(endpoint: string, data: any) {
+        const token = getAdminToken();
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API Error: ${response.statusText}`);
+        }
+        return response.json();
+    },
+
     async delete(endpoint: string) {
         const token = getAdminToken();
         const response = await fetch(`${API_URL}${endpoint}`, {
@@ -47,7 +64,33 @@ export const adminApi = {
                 'Authorization': token ? `Bearer ${token}` : '',
             },
         });
-        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API Error: ${response.statusText}`);
+        }
         return response.json();
+    },
+
+    async download(endpoint: string, filename: string) {
+        const token = getAdminToken();
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API Error: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
     },
 };

@@ -2,13 +2,13 @@ import express from 'express';
 import db from '../config/db.js';
 import jwt from 'jsonwebtoken';
 import { processUserCleanup } from '../services/cleanupService.js';
-import { getUserTableName } from '../utils/tableUtils.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
 import os from 'os';
 import fs from 'fs';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
+const serverStartedAt = Date.now() - process.uptime() * 1000;
 
 // Admin Login (Email + PIN)
 router.post('/login', (req, res) => {
@@ -48,13 +48,8 @@ router.get('/users', (req, res) => {
 
 // List tables for a specific user
 router.get('/users/:uid/tables', (req, res) => {
-    const { uid } = req.params;
     try {
-        const prefix = getUserTableName(uid, '');
-        const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
-        const dbTables = allTables.map(r => r.name);
-        const userTables = dbTables.filter((t: string) => t.startsWith(prefix));
-        res.json(userTables);
+        res.json(['incomes', 'expenses', 'splits', 'friends']);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch user tables' });
     }
@@ -64,34 +59,34 @@ router.get('/users/:uid/tables', (req, res) => {
 router.get('/users/:uid/tables/:tableName/data', (req, res) => {
     const { uid, tableName } = req.params;
     try {
-        const expectedPrefix = getUserTableName(uid, '');
-        if (!tableName.startsWith(expectedPrefix)) {
+        const allowedTables = ['incomes', 'expenses', 'splits', 'friends'];
+        if (!allowedTables.includes(tableName)) {
             res.status(403).json({ error: 'Access denied to this table' });
             return;
         }
 
-        let query = `SELECT * FROM \`${tableName}\` LIMIT 100`;
+        let query = `SELECT * FROM ${tableName} WHERE user_id = ? ORDER BY id DESC LIMIT 100`;
+        let params: any[] = [uid];
 
-        if (tableName.includes('expenses')) {
+        if (tableName === 'expenses') {
             query = `
                 SELECT e.*, c.name as category_name 
-                FROM \`${tableName}\` e 
+                FROM expenses e 
                 LEFT JOIN categories c ON e.category_id = c.id 
+                WHERE e.user_id = ?
                 ORDER BY e.date DESC LIMIT 100
             `;
-        } else if (tableName.includes('splits')) {
-            const friendsTable = getUserTableName(uid, 'friends');
+        } else if (tableName === 'splits') {
             query = `
                 SELECT s.*, f.name as linked_friend_name 
-                FROM \`${tableName}\` s 
-                LEFT JOIN \`${friendsTable}\` f ON s.friend_id = f.id 
+                FROM splits s 
+                LEFT JOIN friends f ON s.friend_id = f.id AND f.user_id = s.user_id
+                WHERE s.user_id = ?
                 ORDER BY s.date DESC LIMIT 100
             `;
-        } else {
-            query = `SELECT * FROM \`${tableName}\` ORDER BY id DESC LIMIT 100`;
         }
 
-        const rows = db.prepare(query).all();
+        const rows = db.prepare(query).all(...params);
         res.json(rows);
     } catch (error) {
         console.error('Error fetching table data:', error);
@@ -120,7 +115,7 @@ router.delete('/users/:uid', (req, res) => {
 // System Health
 router.get('/system/health', (req, res) => {
     try {
-        const dbPath = process.env.DB_PATH || './expense_tracker.db';
+        const dbPath = process.env.DB_PATH || './data/expense_tracker.db';
         let dbSizeBytes = 0;
         if (fs.existsSync(dbPath)) {
             const stats = fs.statSync(dbPath);
@@ -131,7 +126,8 @@ router.get('/system/health', (req, res) => {
         
         res.json({
             status: 'online',
-            uptimeSeconds: process.uptime(),
+            startedAt: new Date(serverStartedAt).toISOString(),
+            uptimeSeconds: Math.floor((Date.now() - serverStartedAt) / 1000),
             dbSizeBytes,
             memory: {
                 rss: memoryUsage.rss,
@@ -163,7 +159,7 @@ router.get('/system/analytics', (req, res) => {
 // Database Backup
 router.get('/system/backup', (req, res) => {
     try {
-        const dbPath = process.env.DB_PATH || './expense_tracker.db';
+        const dbPath = process.env.DB_PATH || './data/expense_tracker.db';
         if (fs.existsSync(dbPath)) {
             res.download(dbPath, `expense_tracker_backup_${new Date().toISOString().split('T')[0]}.db`);
         } else {

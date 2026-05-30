@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import db from '../config/db.js';
-import { sanitizeUid, getUserTableName } from '../utils/tableUtils.js';
 import { sendInactivityDeletionNotice } from './emailService.js';
 
 export const startCleanupScheduler = () => {
@@ -34,57 +33,22 @@ export const runCleanup = () => {
 };
 
 function getUserFullData(uid: string): any {
-    const incomeTable = getUserTableName(uid, 'incomes');
-    const expenseTable = getUserTableName(uid, 'expenses');
-    const splitTable = getUserTableName(uid, 'splits');
-    const friendTable = getUserTableName(uid, 'friends');
-
-    const data: any = {};
-
-    try {
-        data.incomes = db.prepare(`SELECT * FROM \`${incomeTable}\``).all();
-    } catch (e) { data.incomes = []; }
-
-    try {
-        data.expenses = db.prepare(`SELECT * FROM \`${expenseTable}\``).all();
-    } catch (e) { data.expenses = []; }
-
-    try {
-        data.splits = db.prepare(`SELECT * FROM \`${splitTable}\``).all();
-    } catch (e) { data.splits = []; }
-
-    try {
-        data.friends = db.prepare(`SELECT * FROM \`${friendTable}\``).all();
-    } catch (e) { data.friends = []; }
-
-    return data;
+    return {
+        incomes: db.prepare('SELECT * FROM incomes WHERE user_id = ?').all(uid),
+        expenses: db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(uid),
+        splits: db.prepare('SELECT * FROM splits WHERE user_id = ?').all(uid),
+        friends: db.prepare('SELECT * FROM friends WHERE user_id = ?').all(uid),
+    };
 }
 
 function deleteUserData(uid: string) {
-    try {
-        db.transaction(() => {
-            const sUid = sanitizeUid(uid);
-            const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
-            const dbTables = allTables.map(r => r.name);
-
-            const userTables = dbTables.filter((t: string) => t.includes(sUid));
-
-            if (userTables.length > 0) {
-                // SQLite doesn't have SET FOREIGN_KEY_CHECKS = 0; it has PRAGMA foreign_keys = OFF;
-                // But DROP TABLE usually doesn't care if it's not a circular dependency.
-                db.pragma('foreign_keys = OFF');
-                for (const table of userTables) {
-                    db.prepare(`DROP TABLE IF EXISTS \`${table}\``).run();
-                    console.log(`Dropped table: ${table}`);
-                }
-                db.pragma('foreign_keys = ON');
-            }
-
-            db.prepare('DELETE FROM users WHERE id = ?').run(uid);
-        })();
-    } catch (error) {
-        throw error;
-    }
+    db.transaction(() => {
+        db.prepare('DELETE FROM splits WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM expenses WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM incomes WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM friends WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+    })();
 }
 
 export const processUserCleanup = (uid: string, email: string) => {
