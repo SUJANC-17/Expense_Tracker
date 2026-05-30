@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../config/firebase';
+import { getFriendlyAuthError, getFriendlyResetError } from '../utils/authErrors';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { DollarSign, CheckSquare, Square } from 'lucide-react';
+import { DollarSign, CheckSquare, Square, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 import { PrivacyPolicy } from './PrivacyPolicy';
 
 interface AuthFormProps {
@@ -12,13 +15,26 @@ interface AuthFormProps {
   onLoginWithGoogle: () => Promise<void>;
 }
 
+const PRIVACY_ERROR_MESSAGE = 'You must agree to the Privacy Policy to create an account';
+
+const inputClassName =
+  'bg-white/10 border-white/20 text-white placeholder:text-gray-500 transition-all duration-200 ' +
+  'focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 hover:bg-white/15';
+
 export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>(() => window.location.hash === '#signup' ? 'signup' : 'login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [agreedToPrivacyPolicy, setAgreedToPrivacyPolicy] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -39,10 +55,54 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
     return '';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const openForgotPassword = () => {
+    setResetEmail(formData.email.trim());
+    setResetError('');
+    setResetSuccess('');
+    setShowForgotPassword(true);
+  };
+
+  const closeForgotPassword = () => {
+    setShowForgotPassword(false);
+    setResetError('');
+    setResetSuccess('');
+  };
+
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+
+    const email = resetEmail.trim();
+    if (!email) {
+      setResetError('Email is required');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setResetError('Please enter a valid email address');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSuccess('Password reset email sent. Please check your inbox.');
+    } catch (error) {
+      setResetError(getFriendlyResetError(error));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (mode === 'signup' && !agreedToPrivacyPolicy) {
+      setError(PRIVACY_ERROR_MESSAGE);
+      return;
+    }
 
     const validationError = validate();
     if (validationError) {
@@ -57,12 +117,13 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
         window.location.hash = 'login';
         setMode('login');
         setFormData({ username: '', email: formData.email.trim(), password: '', confirmPassword: '' });
+        setShowForgotPassword(false);
         setSuccess('Account created! Redirecting to login...');
       } else {
         await onLogin(formData.email.trim(), formData.password);
       }
-    } catch (err: any) {
-      setError(err.message || (mode === 'signup' ? 'Failed to sign up' : 'Failed to sign in'));
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -75,46 +136,49 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
 
     try {
       await onLoginWithGoogle();
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google');
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
     }
   };
 
+  const isSignup = mode === 'signup';
+  const isSubmitDisabled = loading || (isSignup && !agreedToPrivacyPolicy);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Card className="w-full max-w-md backdrop-blur-xl bg-white/10 border-white/20">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
+      <Card className="w-full max-w-lg shadow-2xl shadow-black/30 backdrop-blur-xl bg-white/10 border-white/20">
+        <CardHeader className="text-center space-y-3 pb-6">
+          <div className="mx-auto w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-1 shadow-lg shadow-purple-950/30">
             <DollarSign className="w-6 h-6 text-white" />
           </div>
           <CardTitle className="text-white">Personal Expense Tracker</CardTitle>
           <CardDescription className="text-gray-300">
-            {mode === 'signup' ? 'Create your account to get started' : 'Sign in to manage your expenses'}
+            {isSignup ? 'Create your account to get started' : 'Sign in to manage your expenses'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5 pb-8">
           {success && (
-            <div className="text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 text-center">
+            <div className="text-emerald-300 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 text-center">
               {success}
             </div>
           )}
           {error && (
-            <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-md p-3 text-center">
+            <div className="text-red-200 text-sm bg-red-500/10 border border-red-500/20 rounded-md p-3 text-center">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
+            {isSignup && (
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-gray-300">Username</Label>
                 <Input
                   id="username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="bg-white/10 border-white/20 text-white"
+                  className={inputClassName}
                   placeholder="Your username"
                   required
                 />
@@ -128,46 +192,108 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="bg-white/10 border-white/20 text-white"
+                className={inputClassName}
                 placeholder="you@example.com"
+                autoComplete="email"
                 required
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-gray-300">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="bg-white/10 border-white/20 text-white"
-                placeholder="Password"
-                required
-              />
-            </div>
-
-            {mode === 'signup' && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-gray-300">Confirm Password</Label>
+              <div className="relative">
                 <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="bg-white/10 border-white/20 text-white"
-                  placeholder="Confirm password"
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className={`${inputClassName} pr-11`}
+                  placeholder="Enter your password"
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-white transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+              {mode === 'login' && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={openForgotPassword}
+                    className="text-xs text-purple-300 hover:text-purple-200 underline underline-offset-2 transition-colors"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {isSignup && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-gray-300">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className={`${inputClassName} pr-11`}
+                    placeholder="Confirm your password"
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {isSignup && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAgreedToPrivacyPolicy(prev => !prev)}
+                    className="mt-0.5 text-purple-400 hover:text-purple-300 transition-colors"
+                    aria-label={agreedToPrivacyPolicy ? 'Uncheck privacy policy agreement' : 'Check privacy policy agreement'}
+                  >
+                    {agreedToPrivacyPolicy ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                  </button>
+                  <p className="text-sm text-gray-300 leading-6">
+                    I have read and agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowPolicy(true)}
+                      className="text-purple-300 hover:text-purple-200 underline underline-offset-2 transition-colors"
+                    >
+                      Privacy Policy
+                    </button>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isSignup && error === PRIVACY_ERROR_MESSAGE && (
+              <p className="text-xs text-red-300">
+                {PRIVACY_ERROR_MESSAGE}
+              </p>
             )}
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-950/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isSubmitDisabled}
             >
-              {loading ? (mode === 'signup' ? 'Creating account...' : 'Signing in...') : (mode === 'signup' ? 'Sign Up' : 'Login')}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {isSignup ? 'Creating account...' : 'Signing in...'}
+                </span>
+              ) : (isSignup ? 'Sign Up' : 'Login')}
             </Button>
           </form>
 
@@ -182,7 +308,11 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
 
           <Button
             onClick={handleGoogleSignIn}
-            className={`w-full ${acceptedTerms ? 'bg-white hover:bg-gray-100 text-gray-900' : 'bg-white/50 text-gray-500 cursor-not-allowed'} border border-gray-300`}
+            className={`w-full transition-all duration-200 ${
+              acceptedTerms
+                ? 'bg-white hover:bg-gray-100 text-gray-900'
+                : 'bg-white/50 text-gray-500 cursor-not-allowed'
+            } border border-gray-300`}
             disabled={loading || !acceptedTerms}
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
@@ -205,14 +335,14 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
             </svg>
             {loading ? 'Signing in...' : 'Sign in with Google'}
           </Button>
-          
-          <div className="flex items-start gap-3 mt-4 text-left p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setAcceptedTerms(!acceptedTerms)}>
+
+          <div className="flex items-start gap-3 mt-4 text-left p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setAcceptedTerms(prev => !prev)}>
             <div className="mt-0.5 text-purple-400">
               {acceptedTerms ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
             </div>
             <p className="text-sm text-gray-300 select-none">
               I have read and agree to the{' '}
-              <button 
+              <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setShowPolicy(true); }}
                 className="text-purple-400 hover:text-purple-300 underline underline-offset-2 decoration-purple-500/50"
@@ -223,10 +353,10 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
           </div>
 
           <div className="text-center text-sm text-gray-300">
-            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            {isSignup ? 'Already have an account? ' : "Don't have an account? "}
             <button
               type="button"
-              className="text-purple-400 hover:text-purple-300 underline underline-offset-2"
+              className="text-purple-300 hover:text-purple-200 underline underline-offset-2 transition-colors"
               onClick={() => {
                 const nextMode = mode === 'login' ? 'signup' : 'login';
                 setMode(nextMode);
@@ -235,13 +365,73 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
                 setSuccess('');
               }}
             >
-              {mode === 'login' ? 'Sign Up' : 'Login'}
+              {isSignup ? 'Login' : 'Sign Up'}
             </button>
           </div>
         </CardContent>
       </Card>
 
       {showPolicy && <PrivacyPolicy onClose={() => setShowPolicy(false)} />}
+
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md shadow-2xl shadow-black/40 backdrop-blur-xl bg-slate-950/95 border-white/20">
+            <CardHeader className="space-y-3">
+              <CardTitle className="text-white">Forgot Password</CardTitle>
+              <CardDescription className="text-gray-300">
+                Enter your email and we will send a password reset link.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {resetSuccess && (
+                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+                  {resetSuccess}
+                </div>
+              )}
+              {resetError && (
+                <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+                  {resetError}
+                </div>
+              )}
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="resetEmail" className="text-gray-300">Email</Label>
+                  <Input
+                    id="resetEmail"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className={inputClassName}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white transition-all duration-200 disabled:opacity-60"
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending...
+                    </span>
+                  ) : 'Send Reset Link'}
+                </Button>
+              </form>
+              <button
+                type="button"
+                onClick={closeForgotPassword}
+                className="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { type User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { apiClient } from '../utils/api';
+import { getFriendlyAuthError } from '../utils/authErrors';
 
 interface AuthContextType {
     user: User | null;
@@ -62,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
-            throw error;
+            throw new Error(getFriendlyAuthError(error));
         }
     };
 
@@ -78,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
-            throw error;
+            throw new Error(getFriendlyAuthError(error));
         }
     };
 

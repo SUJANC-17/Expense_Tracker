@@ -83,6 +83,13 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
             <p>Hello,</p>
             <p>A login to your Expense Tracker account was just confirmed.</p>
             <p><strong>Login time:</strong> ${loginTime}</p>
+            <div style="margin: 20px 0; padding: 16px; border: 1px solid #fecaca; background-color: #fef2f2; border-radius: 8px;">
+              <p style="margin: 0 0 10px; font-weight: bold; color: #991b1b;">If you did not make this login, your account may be compromised.</p>
+              <p style="margin: 0 0 10px; color: #7f1d1d;">Please reset your password immediately using the Forgot Password option on the login screen.</p>
+              <p style="margin: 0; color: #7f1d1d;">
+                If possible, return to the app and use the Forgot Password link to send a reset email to your registered address.
+              </p>
+            </div>
             <p>If you did not initiate this login, please contact support immediately and secure your account.</p>
             <p style="margin-top: 30px;">Best regards,<br>The Expense Tracker Team</p>
           </div>
