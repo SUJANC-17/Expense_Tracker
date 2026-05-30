@@ -3,10 +3,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  port: smtpPort,
+  secure: smtpSecure,
+  requireTLS: !smtpSecure,
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -31,7 +39,7 @@ export const sendMonthlyReport = async (
 
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: smtpFrom,
       to: email,
       subject: `Monthly Expense Report - ${monthName} ${year}`,
       html: `
@@ -71,7 +79,7 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
   try {
     const loginTime = new Date().toLocaleString();
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: smtpFrom,
       to: email,
       subject: 'Expense Tracker Login Notification',
       html: `
@@ -109,7 +117,7 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
 export const sendPasswordResetEmail = async (email: string, resetLink: string): Promise<void> => {
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: smtpFrom,
       to: email,
       subject: 'Expense Tracker Password Reset',
       html: `
@@ -158,7 +166,7 @@ export const sendInactivityDeletionNotice = async (
     const jsonBuffer = Buffer.from(JSON.stringify(data, null, 2));
 
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: smtpFrom,
       to: email,
       subject: 'Account Data Deletion Notice - 30 Days Inactivity',
       html: `
