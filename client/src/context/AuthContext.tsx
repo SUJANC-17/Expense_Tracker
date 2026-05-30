@@ -47,10 +47,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return unsubscribe;
     }, []);
 
+    const sendLoginNotification = async () => {
+        try {
+            await apiClient.post('/auth/login', {});
+        } catch (error) {
+            console.error('Error sending login notification:', error);
+        }
+    };
+
     const login = async (email: string, password: string) => {
         sessionStorage.setItem('login_notification_pending', 'true');
         try {
             await signInWithEmailAndPassword(auth, email, password);
+            await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             throw error;
@@ -66,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem('login_notification_pending', 'true');
         try {
             await signInWithPopup(auth, provider);
+            await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             throw error;

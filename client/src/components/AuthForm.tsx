@@ -54,9 +54,10 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
     try {
       if (mode === 'signup') {
         await onSignup(formData.username.trim(), formData.email.trim(), formData.password);
+        window.location.hash = 'login';
         setMode('login');
         setFormData({ username: '', email: formData.email.trim(), password: '', confirmPassword: '' });
-        setSuccess('Account created successfully. Please log in.');
+        setSuccess('Account created! Redirecting to login...');
       } else {
         await onLogin(formData.email.trim(), formData.password);
       }

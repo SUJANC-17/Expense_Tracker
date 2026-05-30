@@ -11,7 +11,7 @@ const router = express.Router();
 router.post('/register', authenticateToken, (req: AuthRequest, res) => {
     try {
         const { uid, email } = req.user!;
-        const { notifyLogin, username } = req.body;
+        const { username } = req.body;
 
         // Check if user exists by ID or Email (in case Firebase UID changed for the same email)
         const existing = db.prepare('SELECT id, username, last_active_at FROM users WHERE id = ? OR email = ?').get(uid, email) as any;
@@ -25,10 +25,6 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
             createUserTables(uid);
             const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(uid);
             res.json({ message: 'User authenticated', user });
-
-            if (email && notifyLogin) {
-                sendLoginNotification(email).catch(console.error);
-            }
             return;
         }
 
@@ -41,13 +37,30 @@ router.post('/register', authenticateToken, (req: AuthRequest, res) => {
 
         const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(uid);
         res.status(201).json({ message: 'User registered successfully', user });
-        
-        if (email && notifyLogin) {
-            sendLoginNotification(email).catch(console.error);
-        }
     } catch (error) {
         console.error('Error registering user:', error);
         res.status(500).json({ error: 'Failed to register user' });
+    }
+});
+
+// Confirm login and send notification email after a successful authenticated sign-in
+router.post('/login', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const { uid, email } = req.user!;
+        const userRow = db.prepare('SELECT email FROM users WHERE id = ? OR email = ?').get(uid, email || null) as any;
+        const targetEmail = email || userRow?.email;
+
+        if (targetEmail) {
+            await sendLoginNotification(targetEmail);
+        }
+
+        res.json({
+            message: 'Login confirmed',
+            notificationSent: Boolean(targetEmail),
+        });
+    } catch (error) {
+        console.error('Error sending login notification:', error);
+        res.status(500).json({ error: 'Failed to send login notification' });
     }
 });
 

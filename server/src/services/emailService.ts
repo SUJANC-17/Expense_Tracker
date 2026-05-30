@@ -73,17 +73,17 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
     await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
-      subject: 'New Login to Expense Tracker',
+      subject: 'Expense Tracker Login Notification',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #2563eb; color: white; padding: 20px; text-align: center;">
-            <h2 style="margin: 0;">New Login Detected</h2>
+            <h2 style="margin: 0;">Expense Tracker Login Alert</h2>
           </div>
           <div style="padding: 30px; color: #1e293b;">
             <p>Hello,</p>
-            <p>You have successfully logged into the Expense Tracker app.</p>
-            <p><strong>Time:</strong> ${loginTime}</p>
-            <p>If this was you, you can safely ignore this email. If you did not log in, please secure your Google account immediately.</p>
+            <p>A login to your Expense Tracker account was just confirmed.</p>
+            <p><strong>Login time:</strong> ${loginTime}</p>
+            <p>If you did not initiate this login, please contact support immediately and secure your account.</p>
             <p style="margin-top: 30px;">Best regards,<br>The Expense Tracker Team</p>
           </div>
           <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
