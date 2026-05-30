@@ -1,9 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET environment variable is required');
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
+if (!process.env.JWT_SECRET) {
+    console.warn('JWT_SECRET is not set; using fallback admin secret. Set JWT_SECRET in .env for production.');
 }
 
 export interface AdminAuthRequest extends Request {
