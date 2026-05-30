@@ -48,15 +48,14 @@ export function Reports({ incomes, expenses, splits }: ReportsProps) {
 
     const totalIncome = filteredIncomes.reduce((sum, i) => sum + i.amount, 0);
     const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const balance = totalIncome - totalExpenses;
+    const totalUnpaidSplits = filteredSplits.reduce((sum, s) => sum + s.amount, 0);
+    const balance = totalIncome - totalExpenses - totalUnpaidSplits;
 
     const expensesByCategory = filteredExpenses.reduce((acc, expense) => {
       const categoryName = getCategoryName(expense.categoryId);
       acc[categoryName] = (acc[categoryName] || 0) + expense.amount;
       return acc;
     }, {} as Record<string, number>);
-
-    const totalUnpaidSplits = filteredSplits.reduce((sum, s) => sum + s.amount, 0);
 
     return {
       year,

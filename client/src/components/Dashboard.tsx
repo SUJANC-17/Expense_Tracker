@@ -28,16 +28,18 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
 
     const totalIncome = currentIncomes.reduce((sum, i) => sum + i.amount, 0);
     const totalExpenses = currentExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const balance = totalIncome - totalExpenses;
+    const unpaidSplits = splits.filter(s => {
+      const date = new Date(s.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear && !s.isPaid;
+    });
+    const totalUnpaid = unpaidSplits.reduce((sum, s) => sum + s.amount, 0);
+    const balance = totalIncome - totalExpenses - totalUnpaid;
 
     const expensesByCategory = currentExpenses.reduce((acc, expense) => {
       const categoryName = getCategoryName(expense.categoryId);
       acc[categoryName] = (acc[categoryName] || 0) + expense.amount;
       return acc;
     }, {} as Record<string, number>);
-
-    const unpaidSplits = splits.filter(s => !s.isPaid);
-    const totalUnpaid = unpaidSplits.reduce((sum, s) => sum + s.amount, 0);
 
     return {
       totalIncome,
