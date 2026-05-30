@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import {
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged,
+    updateProfile,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { apiClient } from '../utils/api';
 import type { User } from '../appTypes';
@@ -13,14 +20,30 @@ export const useAuth = () => {
             if (firebaseUser) {
                 const appUser: User = {
                     id: firebaseUser.uid,
+                    username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
                     email: firebaseUser.email || '',
                     createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
                 };
                 setUser(appUser);
-                // Register/Login in backend
-                const isNewSession = !sessionStorage.getItem('session_synced');
-                apiClient.post('/auth/register', { isNewLogin: isNewSession }).catch(err => console.error('Silent registration error:', err));
-                sessionStorage.setItem('session_synced', 'true');
+                const notifyLogin = sessionStorage.getItem('login_notification_pending') === 'true' && !sessionStorage.getItem('session_synced');
+                apiClient.post('/auth/register', { notifyLogin, username: appUser.username })
+                    .then((res) => {
+                        if (res?.user) {
+                            const syncedUser: User = {
+                                id: res.user.id,
+                                username: res.user.username || appUser.username,
+                                email: res.user.email || appUser.email,
+                                createdAt: res.user.created_at || appUser.createdAt,
+                            };
+                            setUser(syncedUser);
+                            localStorage.setItem('user', JSON.stringify(syncedUser));
+                        }
+                    })
+                    .catch(err => console.error('Silent registration error:', err))
+                    .finally(() => {
+                        sessionStorage.removeItem('login_notification_pending');
+                        sessionStorage.setItem('session_synced', 'true');
+                    });
                 // Store user in localStorage for API authentication
                 localStorage.setItem('user', JSON.stringify(appUser));
             } else {
@@ -33,17 +56,45 @@ export const useAuth = () => {
         return () => unsubscribe();
     }, []);
 
+    const login = async (email: string, password: string): Promise<void> => {
+        try {
+            sessionStorage.setItem('login_notification_pending', 'true');
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            sessionStorage.removeItem('login_notification_pending');
+            console.error('Error signing in:', error);
+            throw error;
+        }
+    };
+
+    const signup = async (username: string, email: string, password: string): Promise<void> => {
+        try {
+            const result = await createUserWithEmailAndPassword(auth, email, password);
+            await updateProfile(result.user, { displayName: username });
+            await apiClient.post('/auth/register', { username });
+            await signOut(auth);
+            sessionStorage.removeItem('session_synced');
+            sessionStorage.removeItem('login_notification_pending');
+        } catch (error) {
+            console.error('Error signing up:', error);
+            throw error;
+        }
+    };
+
     const loginWithGoogle = async (): Promise<void> => {
         try {
+            sessionStorage.setItem('login_notification_pending', 'true');
             const result = await signInWithPopup(auth, googleProvider);
             const appUser: User = {
                 id: result.user.uid,
+                username: result.user.displayName || result.user.email?.split('@')[0] || 'User',
                 email: result.user.email || '',
                 createdAt: result.user.metadata.creationTime || new Date().toISOString(),
             };
             localStorage.setItem('user', JSON.stringify(appUser));
             setUser(appUser);
         } catch (error) {
+            sessionStorage.removeItem('login_notification_pending');
             console.error('Error signing in with Google:', error);
             throw error;
         }
@@ -54,6 +105,7 @@ export const useAuth = () => {
             await signOut(auth);
             localStorage.removeItem('user');
             sessionStorage.removeItem('session_synced');
+            sessionStorage.removeItem('login_notification_pending');
             setUser(null);
         } catch (error) {
             console.error('Error signing out:', error);
@@ -61,5 +113,5 @@ export const useAuth = () => {
         }
     };
 
-    return { user, loading, loginWithGoogle, logout };
+    return { user, loading, login, signup, loginWithGoogle, logout };
 };

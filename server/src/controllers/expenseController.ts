@@ -1,41 +1,18 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
-import { getUserTableName } from '../utils/tableUtils.js';
-import { createUserTables } from '../models/userSchema.js';
-
-// Helper to handle table creation on error
-const executeWithTableRetry = <T>(
-    uid: string,
-    operation: () => T
-): T => {
-    try {
-        return operation();
-    } catch (error: any) {
-        // SQLite: Table doesn't exist error message usually contains "no such table"
-        if (error.message.includes('no such table')) {
-            console.log(`Table missing for user ${uid}, attempting to create...`);
-            createUserTables(uid);
-            return operation();
-        }
-        throw error;
-    }
-};
 
 // Get all expenses for user
 export const getExpenses = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'expenses');
-
-        const rows = executeWithTableRetry(uid, () => {
-            return db.prepare(
-                `SELECT e.*, c.name as category_name 
-                 FROM \`${tableName}\` e 
-                 JOIN categories c ON e.category_id = c.id 
-                 ORDER BY e.date DESC`
-            ).all();
-        });
+        const rows = db.prepare(
+            `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
+             FROM expenses e
+             JOIN categories c ON e.category_id = c.id
+             WHERE e.user_id = ?
+             ORDER BY e.date DESC`
+        ).all(uid);
 
         res.json(rows);
     } catch (error) {
@@ -67,20 +44,16 @@ export const addExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'expenses');
-        
-        const result = executeWithTableRetry(uid, () => {
-            return db.prepare(
-                `INSERT INTO \`${tableName}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`
-            ).run(amount, finalCategoryId, description || null, date);
-        });
+        const result = db.prepare(
+            'INSERT INTO expenses (user_id, amount, category_id, description, date) VALUES (?, ?, ?, ?, ?)'
+        ).run(uid, amount, finalCategoryId, description || null, date);
 
         const newExpense = db.prepare(
-            `SELECT e.*, c.name as category_name 
-             FROM \`${tableName}\` e 
+            `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
+             FROM expenses e
              JOIN categories c ON e.category_id = c.id 
-             WHERE e.id = ?`
-        ).get(result.lastInsertRowid);
+             WHERE e.id = ? AND e.user_id = ?`
+        ).get(result.lastInsertRowid, uid);
 
         res.status(201).json({
             ...newExpense as object,
@@ -100,17 +73,22 @@ export const updateExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'expenses');
         const result = db.prepare(
-            `UPDATE \`${tableName}\` SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ?`
-        ).run(amount, finalCategoryId, description, date, id);
+            'UPDATE expenses SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ? AND user_id = ?'
+        ).run(amount, finalCategoryId, description, date, id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Expense not found' });
             return;
         }
 
-        res.json({ message: 'Expense updated successfully' });
+        const updated = db.prepare(
+            `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
+             FROM expenses e
+             JOIN categories c ON e.category_id = c.id
+             WHERE e.id = ? AND e.user_id = ?`
+        ).get(id, uid);
+        res.json(updated);
     } catch (error) {
         console.error('Error updating expense:', error);
         res.status(500).json({ error: 'Failed to update expense' });
@@ -123,10 +101,9 @@ export const deleteExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'expenses');
         const result = db.prepare(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`
-        ).run(id);
+            'DELETE FROM expenses WHERE id = ? AND user_id = ?'
+        ).run(id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Expense not found' });

@@ -13,6 +13,7 @@ import { adminApi } from '../../utils/adminApi';
 // Type definitions
 interface SystemHealth {
     status: string;
+    startedAt: string;
     uptimeSeconds: number;
     dbSizeBytes: number;
     memory: {
@@ -137,8 +138,13 @@ export default function AdminDashboard() {
         try {
             await adminApi.delete(`/admin/users/${uid}`);
             alert('User deleted.');
-            fetchUsers();
-        } catch (err) { alert('Failed to delete user'); }
+            setSelectedUserTables(null);
+            setSelectedTableData(null);
+            await fetchUsers();
+            if (activeTab === 'overview') {
+                await fetchAnalytics();
+            }
+        } catch (err: any) { alert(err.message || 'Failed to delete user'); }
     };
 
     const handleAddCategory = async () => {
@@ -167,10 +173,15 @@ export default function AdminDashboard() {
         } catch (err) { alert('Failed to delete category'); }
     };
 
-    const handleBackup = () => {
-        const token = localStorage.getItem('admin_token');
-        const apiUrl = import.meta.env.VITE_API_URL || '/api';
-        window.open(`${apiUrl}/admin/system/backup?token=${token}`, '_blank');
+    const handleBackup = async () => {
+        try {
+            await adminApi.download(
+                '/admin/system/backup',
+                `expense_tracker_backup_${new Date().toISOString().split('T')[0]}.db`
+            );
+        } catch (err: any) {
+            alert(err.message || 'Failed to download database');
+        }
     };
 
     // --- Renderers ---

@@ -1,7 +1,16 @@
-import { useState, useEffect } from "react";
-import AdminDashboard from "./components/admin/AdminDashboard";
-import UserApp from "./UserApp";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { Toaster } from "sonner";
+
+const AdminDashboard = lazy(() => import("./components/admin/AdminDashboard"));
+const UserApp = lazy(() => import("./UserApp"));
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white">
+      Loading...
+    </div>
+  );
+}
 
 export default function App() {
   // Simple router check - does not use hooks that trigger auth/data fetching!
@@ -25,7 +34,9 @@ export default function App() {
   if (isAdmin) {
     return (
       <>
-        <AdminDashboard />
+        <Suspense fallback={<LoadingFallback />}>
+          <AdminDashboard />
+        </Suspense>
         <Toaster theme="dark" position="bottom-right" />
       </>
     );
@@ -33,7 +44,9 @@ export default function App() {
 
   return (
     <>
-      <UserApp />
+      <Suspense fallback={<LoadingFallback />}>
+        <UserApp />
+      </Suspense>
       <Toaster theme="dark" position="bottom-right" />
     </>
   );

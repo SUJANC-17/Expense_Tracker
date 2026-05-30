@@ -1,21 +1,75 @@
 import { useState } from 'react';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { DollarSign, CheckSquare, Square } from 'lucide-react';
 import { PrivacyPolicy } from './PrivacyPolicy';
 
 interface AuthFormProps {
+  onLogin: (email: string, password: string) => Promise<void>;
+  onSignup: (username: string, email: string, password: string) => Promise<void>;
   onLoginWithGoogle: () => Promise<void>;
 }
 
-export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
+export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps) {
+  const [mode, setMode] = useState<'login' | 'signup'>(() => window.location.hash === '#signup' ? 'signup' : 'login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const validate = () => {
+    if (mode === 'signup' && !formData.username.trim()) return 'Username is required';
+    if (!formData.email.trim()) return 'Email is required';
+    if (!isValidEmail(formData.email)) return 'Enter a valid email address';
+    if (!formData.password) return 'Password is required';
+    if (formData.password.length < 6) return 'Password must be at least 6 characters';
+    if (mode === 'signup' && !formData.confirmPassword) return 'Confirm password is required';
+    if (mode === 'signup' && formData.password !== formData.confirmPassword) return 'Passwords do not match';
+    return '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        await onSignup(formData.username.trim(), formData.email.trim(), formData.password);
+        setMode('login');
+        setFormData({ username: '', email: formData.email.trim(), password: '', confirmPassword: '' });
+        setSuccess('Account created successfully. Please log in.');
+      } else {
+        await onLogin(formData.email.trim(), formData.password);
+      }
+    } catch (err: any) {
+      setError(err.message || (mode === 'signup' ? 'Failed to sign up' : 'Failed to sign in'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -36,15 +90,95 @@ export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
           </div>
           <CardTitle className="text-white">Personal Expense Tracker</CardTitle>
           <CardDescription className="text-gray-300">
-            Sign in with Google to get started
+            {mode === 'signup' ? 'Create your account to get started' : 'Sign in to manage your expenses'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {success && (
+            <div className="text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 text-center">
+              {success}
+            </div>
+          )}
           {error && (
             <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-md p-3 text-center">
               {error}
             </div>
           )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-gray-300">Username</Label>
+                <Input
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="bg-white/10 border-white/20 text-white"
+                  placeholder="Your username"
+                  required
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-gray-300">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="bg-white/10 border-white/20 text-white"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-gray-300">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="bg-white/10 border-white/20 text-white"
+                placeholder="Password"
+                required
+              />
+            </div>
+
+            {mode === 'signup' && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-gray-300">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className="bg-white/10 border-white/20 text-white"
+                  placeholder="Confirm password"
+                  required
+                />
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+              disabled={loading}
+            >
+              {loading ? (mode === 'signup' ? 'Creating account...' : 'Signing in...') : (mode === 'signup' ? 'Sign Up' : 'Login')}
+            </Button>
+          </form>
+
+          <div className="relative py-1">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-transparent px-2 text-gray-400">or</span>
+            </div>
+          </div>
+
           <Button
             onClick={handleGoogleSignIn}
             className={`w-full ${acceptedTerms ? 'bg-white hover:bg-gray-100 text-gray-900' : 'bg-white/50 text-gray-500 cursor-not-allowed'} border border-gray-300`}
@@ -85,6 +219,23 @@ export function AuthForm({ onLoginWithGoogle }: AuthFormProps) {
                 Privacy Policy
               </button>
             </p>
+          </div>
+
+          <div className="text-center text-sm text-gray-300">
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <button
+              type="button"
+              className="text-purple-400 hover:text-purple-300 underline underline-offset-2"
+              onClick={() => {
+                const nextMode = mode === 'login' ? 'signup' : 'login';
+                setMode(nextMode);
+                window.location.hash = nextMode;
+                setError('');
+                setSuccess('');
+              }}
+            >
+              {mode === 'login' ? 'Sign Up' : 'Login'}
+            </button>
           </div>
         </CardContent>
       </Card>

@@ -1,24 +1,14 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
-import { getUserTableName } from '../utils/tableUtils.js';
-import { createUserTables } from '../models/userSchema.js';
 
 // Get all split expenses for user
 export const getSplits = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-
-        // Ensure user tables exist
-        createUserTables(uid);
-
-        const tableName = getUserTableName(uid, 'splits');
-
-        console.log(`Fetching splits from table: ${tableName}`);
-
         const rows = db.prepare(
-            `SELECT * FROM \`${tableName}\` ORDER BY date DESC`
-        ).all();
+            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE user_id = ? ORDER BY date DESC'
+        ).all(uid);
 
         console.log(`Found ${rows.length} splits`);
         res.json(rows);
@@ -32,10 +22,9 @@ export const getSplits = (req: AuthRequest, res: Response): void => {
 export const getUnpaidSplits = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'splits');
         const rows = db.prepare(
-            `SELECT * FROM \`${tableName}\` WHERE is_paid = 0 ORDER BY date DESC`
-        ).all();
+            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE user_id = ? AND is_paid = 0 ORDER BY date DESC'
+        ).all(uid);
         res.json(rows);
     } catch (error) {
         console.error('Error fetching unpaid splits:', error);
@@ -56,22 +45,14 @@ export const addSplit = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-
-        // Ensure user tables exist
-        createUserTables(uid);
-
-        const tableName = getUserTableName(uid, 'splits');
-
-        console.log(`Inserting into table: ${tableName}`);
-
         const result = db.prepare(
-            `INSERT INTO \`${tableName}\` (friend_id, friend_name, amount, description, date, is_paid) VALUES (?, ?, ?, ?, ?, 0)`
-        ).run(friend_id || null, friend_name || null, parseFloat(amount), description || null, date);
+            'INSERT INTO splits (user_id, friend_id, friend_name, amount, description, date, is_paid) VALUES (?, ?, ?, ?, ?, ?, 0)'
+        ).run(uid, friend_id || null, friend_name || null, parseFloat(amount), description || null, date);
 
         console.log('Split inserted successfully:', result.lastInsertRowid);
         const newSplit = db.prepare(
-            `SELECT * FROM \`${tableName}\` WHERE id = ?`
-        ).get(result.lastInsertRowid);
+            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE id = ? AND user_id = ?'
+        ).get(result.lastInsertRowid, uid);
 
         res.status(201).json({
             ...newSplit as object,
@@ -95,12 +76,6 @@ export const addSplitBulk = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
 
-        // Ensure user tables exist
-        createUserTables(uid);
-
-        const splitTable = getUserTableName(uid, 'splits');
-        const expenseTable = getUserTableName(uid, 'expenses');
-
         db.transaction(() => {
             // 1. Handle user's personal share as an expense
             if (userShare && parseFloat(userShare) > 0) {
@@ -115,16 +90,16 @@ export const addSplitBulk = (req: AuthRequest, res: Response): void => {
                 }
 
                 db.prepare(
-                    `INSERT INTO \`${expenseTable}\` (amount, category_id, description, date) VALUES (?, ?, ?, ?)`
-                ).run(parseFloat(userShare), categoryId, description || 'Personal share of split', date);
+                    'INSERT INTO expenses (user_id, amount, category_id, description, date) VALUES (?, ?, ?, ?, ?)'
+                ).run(uid, parseFloat(userShare), categoryId, description || 'Personal share of split', date);
             }
 
             // 2. Handle friend splits
             const insertSplit = db.prepare(
-                `INSERT INTO \`${splitTable}\` (friend_id, friend_name, amount, description, date, is_paid) VALUES (?, ?, ?, ?, ?, 0)`
+                'INSERT INTO splits (user_id, friend_id, friend_name, amount, description, date, is_paid) VALUES (?, ?, ?, ?, ?, ?, 0)'
             );
             for (const split of splits) {
-                insertSplit.run(split.friend_id || null, split.friend_name || null, parseFloat(split.amount), description || null, date);
+                insertSplit.run(uid, split.friend_id || null, split.friend_name || null, parseFloat(split.amount), description || null, date);
             }
         })();
 
@@ -142,17 +117,19 @@ export const markSplitPaid = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'splits');
         const result = db.prepare(
-            `UPDATE \`${tableName}\` SET is_paid = 1, paid_at = ? WHERE id = ?`
-        ).run(now, id);
+            'UPDATE splits SET is_paid = 1, paid_at = ? WHERE id = ? AND user_id = ?'
+        ).run(now, id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Split expense not found' });
             return;
         }
 
-        res.json({ message: 'Split marked as paid' });
+        const updated = db.prepare(
+            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE id = ? AND user_id = ?'
+        ).get(id, uid);
+        res.json(updated);
     } catch (error) {
         console.error('Error marking split as paid:', error);
         res.status(500).json({ error: 'Failed to mark split as paid' });
@@ -162,21 +139,38 @@ export const markSplitPaid = (req: AuthRequest, res: Response): void => {
 // Update split
 export const updateSplit = (req: AuthRequest, res: Response): void => {
     const { id } = req.params;
-    const { friend_name, amount, description, date, is_paid } = req.body;
+    const { friend_name, friendName, amount, description, date, is_paid, isPaid } = req.body;
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'splits');
+        const paidValue = is_paid ?? isPaid;
         const result = db.prepare(
-            `UPDATE \`${tableName}\` SET friend_name = ?, amount = ?, description = ?, date = ?, is_paid = ? WHERE id = ?`
-        ).run(friend_name, amount, description, date, is_paid ? 1 : 0, id);
+            `UPDATE splits
+             SET friend_name = COALESCE(?, friend_name),
+                 amount = COALESCE(?, amount),
+                 description = COALESCE(?, description),
+                 date = COALESCE(?, date),
+                 is_paid = COALESCE(?, is_paid)
+             WHERE id = ? AND user_id = ?`
+        ).run(
+            friend_name ?? friendName ?? null,
+            amount ?? null,
+            description ?? null,
+            date ?? null,
+            paidValue === undefined ? null : (paidValue ? 1 : 0),
+            id,
+            uid
+        );
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Split expense not found' });
             return;
         }
 
-        res.json({ message: 'Split updated successfully' });
+        const updated = db.prepare(
+            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE id = ? AND user_id = ?'
+        ).get(id, uid);
+        res.json(updated);
     } catch (error) {
         console.error('Error updating split:', error);
         res.status(500).json({ error: 'Failed to update split' });
@@ -189,10 +183,9 @@ export const deleteSplit = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'splits');
         const result = db.prepare(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`
-        ).run(id);
+            'DELETE FROM splits WHERE id = ? AND user_id = ?'
+        ).run(id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Split expense not found' });

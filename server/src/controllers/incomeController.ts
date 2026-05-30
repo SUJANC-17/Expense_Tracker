@@ -1,37 +1,14 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
-import { getUserTableName } from '../utils/tableUtils.js';
-import { createUserTables } from '../models/userSchema.js';
-
-// Helper to handle table creation on error
-const executeWithTableRetry = <T>(
-    uid: string,
-    operation: () => T
-): T => {
-    try {
-        return operation();
-    } catch (error: any) {
-        if (error.message.includes('no such table')) {
-            console.log(`Table missing for user ${uid}, attempting to create...`);
-            createUserTables(uid);
-            return operation();
-        }
-        throw error;
-    }
-};
 
 // Get all incomes for user
 export const getIncomes = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'incomes');
-
-        const rows = executeWithTableRetry(uid, () => {
-            return db.prepare(
-                `SELECT * FROM \`${tableName}\` ORDER BY date DESC`
-            ).all();
-        });
+        const rows = db.prepare(
+            'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE user_id = ? ORDER BY date DESC'
+        ).all(uid);
 
         res.json(rows);
     } catch (error) {
@@ -51,20 +28,15 @@ export const addIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'incomes');
-
-        const result = executeWithTableRetry(uid, () => {
-            return db.prepare(
-                `INSERT INTO \`${tableName}\` (amount, source, description, date) VALUES (?, ?, ?, ?)`
-            ).run(amount, source, description || null, date);
-        });
+        const result = db.prepare(
+            'INSERT INTO incomes (user_id, amount, source, description, date) VALUES (?, ?, ?, ?, ?)'
+        ).run(uid, amount, source, description || null, date);
+        const newIncome = db.prepare(
+            'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE id = ? AND user_id = ?'
+        ).get(result.lastInsertRowid, uid);
 
         res.status(201).json({
-            id: Number(result.lastInsertRowid),
-            amount: parseFloat(amount),
-            source,
-            description: description || null,
-            date,
+            ...newIncome as object,
             message: 'Income added successfully'
         });
     } catch (error) {
@@ -80,17 +52,19 @@ export const updateIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'incomes');
         const result = db.prepare(
-            `UPDATE \`${tableName}\` SET amount = ?, source = ?, description = ?, date = ? WHERE id = ?`
-        ).run(amount, source, description, date, id);
+            'UPDATE incomes SET amount = ?, source = ?, description = ?, date = ? WHERE id = ? AND user_id = ?'
+        ).run(amount, source, description, date, id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Income not found' });
             return;
         }
 
-        res.json({ message: 'Income updated successfully' });
+        const updated = db.prepare(
+            'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE id = ? AND user_id = ?'
+        ).get(id, uid);
+        res.json(updated);
     } catch (error) {
         console.error('Error updating income:', error);
         res.status(500).json({ error: 'Failed to update income' });
@@ -103,10 +77,9 @@ export const deleteIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
-        const tableName = getUserTableName(uid, 'incomes');
         const result = db.prepare(
-            `DELETE FROM \`${tableName}\` WHERE id = ?`
-        ).run(id);
+            'DELETE FROM incomes WHERE id = ? AND user_id = ?'
+        ).run(id, uid);
 
         if (result.changes === 0) {
             res.status(404).json({ error: 'Income not found' });
