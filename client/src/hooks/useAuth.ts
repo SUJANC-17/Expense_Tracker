@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { apiClient } from '../utils/api';
+import { getFriendlyAuthError } from '../utils/authErrors';
 import type { User } from '../appTypes';
 
 export const useAuth = () => {
@@ -72,7 +73,7 @@ export const useAuth = () => {
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             console.error('Error signing in:', error);
-            throw error;
+            throw new Error(getFriendlyAuthError(error));
         }
     };
 
@@ -86,7 +87,7 @@ export const useAuth = () => {
             sessionStorage.removeItem('login_notification_pending');
         } catch (error) {
             console.error('Error signing up:', error);
-            throw error;
+            throw new Error(getFriendlyAuthError(error));
         }
     };
 
@@ -106,7 +107,7 @@ export const useAuth = () => {
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             console.error('Error signing in with Google:', error);
-            throw error;
+            throw new Error(getFriendlyAuthError(error));
         }
     };
 
