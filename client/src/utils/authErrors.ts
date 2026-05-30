@@ -10,6 +10,10 @@ const ERROR_MAP: Record<string, string> = {
   'auth/too-many-requests': 'Too many failed attempts. Please try again later.',
   'auth/network-request-failed': 'Network error. Please check your connection.',
   'auth/invalid-email': 'Please enter a valid email address.',
+  EMAIL_NOT_FOUND: 'No account found with this email. Please sign up.',
+  INVALID_EMAIL: 'Please enter a valid email address.',
+  OPERATION_NOT_ALLOWED: 'Password reset is not enabled for this project.',
+  TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many failed attempts. Please try again later.',
 };
 
 const API_ERROR_MAP: Array<[RegExp, string]> = [
@@ -45,7 +49,5 @@ export function getFriendlyAuthError(error: unknown): string {
 }
 
 export function getFriendlyResetError(error: unknown): string {
-  const message = getFriendlyAuthError(error);
-  if (message === 'Something went wrong. Please try again.') return message;
-  return message;
+  return getFriendlyAuthError(error);
 }

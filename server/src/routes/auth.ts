@@ -3,8 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { createUserTables } from '../models/userSchema.js';
-import admin from '../config/firebase.js';
-import { sendLoginNotification, sendPasswordResetEmail } from '../services/emailService.js';
+import { sendLoginNotification } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -65,36 +64,61 @@ router.post('/login', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// Send password reset email using Firebase-generated reset link and existing SMTP transport
+// Send password reset email through Firebase Auth REST API using the public Web API key
 router.post('/password-reset', async (req, res) => {
-    const { email } = req.body ?? {};
+    const { email, apiKey } = req.body ?? {};
+    const firebaseApiKey = typeof apiKey === 'string' && apiKey.trim()
+        ? apiKey.trim()
+        : process.env.FIREBASE_WEB_API_KEY || process.env.VITE_FIREBASE_API_KEY;
 
     if (!email || typeof email !== 'string') {
         res.status(400).json({ error: 'Email is required' });
         return;
     }
 
+    if (!firebaseApiKey) {
+        res.status(500).json({ error: 'Firebase Web API key is not configured on the server.' });
+        return;
+    }
+
     try {
-        const resetLink = await admin.auth().generatePasswordResetLink(email.trim());
-        await sendPasswordResetEmail(email.trim(), resetLink);
-
-        res.json({
-            message: 'Password reset email sent',
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Firebase-Locale': 'en',
+            },
+            body: JSON.stringify({
+                requestType: 'PASSWORD_RESET',
+                email: email.trim(),
+            }),
         });
-    } catch (error: any) {
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const code = String(data?.error?.message || data?.error?.errors?.[0]?.message || '');
+            if (code === 'EMAIL_NOT_FOUND') {
+                res.status(404).json({ error: 'No account found with this email. Please sign up.' });
+                return;
+            }
+            if (code === 'INVALID_EMAIL') {
+                res.status(400).json({ error: 'Please enter a valid email address.' });
+                return;
+            }
+            if (code === 'OPERATION_NOT_ALLOWED') {
+                res.status(400).json({ error: 'Password reset is not enabled for this project.' });
+                return;
+            }
+
+            console.error('Firebase REST password reset failed:', data);
+            res.status(500).json({ error: 'Failed to send password reset email' });
+            return;
+        }
+
+        res.json({ message: 'Password reset email sent' });
+    } catch (error) {
         console.error('Error sending password reset email:', error);
-
-        const code = error?.code || '';
-        if (code === 'auth/user-not-found') {
-            res.status(404).json({ error: 'No account found with this email. Please sign up.' });
-            return;
-        }
-
-        if (code === 'auth/invalid-email') {
-            res.status(400).json({ error: 'Please enter a valid email address.' });
-            return;
-        }
-
         res.status(500).json({ error: 'Failed to send password reset email' });
     }
 });
