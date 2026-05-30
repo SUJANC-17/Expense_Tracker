@@ -56,10 +56,19 @@ export const useAuth = () => {
         return () => unsubscribe();
     }, []);
 
+    const sendLoginNotification = async () => {
+        try {
+            await apiClient.post('/auth/login', {});
+        } catch (error) {
+            console.error('Error sending login notification:', error);
+        }
+    };
+
     const login = async (email: string, password: string): Promise<void> => {
         try {
             sessionStorage.setItem('login_notification_pending', 'true');
             await signInWithEmailAndPassword(auth, email, password);
+            await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             console.error('Error signing in:', error);
@@ -93,6 +102,7 @@ export const useAuth = () => {
             };
             localStorage.setItem('user', JSON.stringify(appUser));
             setUser(appUser);
+            await sendLoginNotification();
         } catch (error) {
             sessionStorage.removeItem('login_notification_pending');
             console.error('Error signing in with Google:', error);
