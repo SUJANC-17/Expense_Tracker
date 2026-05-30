@@ -91,13 +91,6 @@ export const generateAndSendReport = async (
          WHERE user_id = ? AND is_paid = 1 AND strftime('%Y', paid_at) = ? AND strftime('%m', paid_at) = ?`
     ).get(userId, yearStr, monthStr) as any;
 
-    // Get total upfront splits created in the month (Outgoing money)
-    const splitExpenseRows = db.prepare(
-        `SELECT COALESCE(SUM(amount), 0) as total_split_expense 
-         FROM splits 
-         WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`
-    ).get(userId, yearStr, monthStr) as any;
-
     // Get unpaid splits total
     const unpaidSplitsRows = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total_unpaid 
@@ -116,10 +109,9 @@ export const generateAndSendReport = async (
     const baseIncome = Number(incomeRows?.total_income || 0);
     const splitRepayments = Number(splitIncomeRows?.total_split_income || 0);
     const baseExpense = Number(expenseRows?.total_expense || 0);
-    const upfrontSplits = Number(splitExpenseRows?.total_split_expense || 0);
 
     const totalIncome = baseIncome;
-    const totalExpense = baseExpense + upfrontSplits;
+    const totalExpense = baseExpense;
     const balance = totalIncome - totalExpense + splitRepayments;
     const totalUnpaid = Number(unpaidSplitsRows?.total_unpaid || 0);
 
