@@ -5,6 +5,11 @@ export interface User {
     createdAt: string;
 }
 
+export interface ReminderSettings {
+    reminderEnabled: boolean;
+    reminderTime: string;
+}
+
 export interface Income {
     id: number;
     userId: string;

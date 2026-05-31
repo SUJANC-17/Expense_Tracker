@@ -1,94 +1,49 @@
 # Quick Start Guide - Expense Tracker
 
-## Current Issue: MySQL Password
+## 1. Fix Database Settings
 
-Your `.env` file still has `DB_PASSWORD=your_password` which needs to be your actual MySQL password.
+Open `server/.env` and make sure `DB_PASSWORD` matches your MySQL password.
 
-## Step-by-Step Setup
+## 2. Create the Database
 
-### 1. Fix MySQL Connection
+Run this in MySQL or phpMyAdmin:
 
-**Option A: If you know your MySQL password**
-- Open `d:\Expense-Tracker\server\.env`
-- Change line 4: `DB_PASSWORD=YourActualPassword`
-
-**Option B: If you don't know the password**
-Try these common defaults:
-- Empty password: `DB_PASSWORD=`
-- Default: `DB_PASSWORD=root`
-- XAMPP default: `DB_PASSWORD=` (empty)
-
-**Option C: Reset MySQL Password**
-```bash
-# Open MySQL command line and run:
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'newpassword';
-FLUSH PRIVILEGES;
-```
-
-### 2. Create Database
-
-Open MySQL command line or phpMyAdmin and run:
 ```sql
 CREATE DATABASE expense_tracker;
 ```
 
-### One-Click Start (Recommended)
-Double-click `start_all.bat` in the root folder. It will open 4 windows for you automatically.
+## 3. Start the App
 
-### Manual Startup (If double-click doesn't work)
+### Remote access with Cloudflare
 
-You need **4 separate terminals**.
+Double-click `start_cloudflare.bat` in the repo root.
 
-1. **Backend**:
-   ```bash
-   cd server
-   npm run dev
-   ```
+This starts:
 
-2. **Frontend**:
-   ```bash
-   cd client
-   npm run dev
-   ```
+1. Backend on port `3000`
+2. Frontend on port `5173`
+3. Cloudflare tunnel for `http://localhost:5173`
 
-3. **Proxy Server** (Important!):
-   ```bash
-   cd server
-   node proxy.js
-   ```
+Cloudflare will print the public URL in the tunnel window.
 
-4. **Ngrok**:
-   ```bash
-   cd ngrok
-   ngrok start --all --config ngrok_config.yml
-   ```
+### Local-only
 
-### 5. Open Application
+If you do not want a tunnel, use `start_all.bat` instead.
 
-Go to your ngrok URL: **https://elke-nonstrategic-shad.ngrok-free.dev**
-(Or find it at http://localhost:4040)
-
----
-
-## Firebase Setup (Can Do Later)
-
-The Firebase errors are non-critical. The app will work without it initially, but you'll need it for authentication:
+## 4. Firebase Setup
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a project
 3. Enable Email/Password authentication
-4. Download service account JSON → save as `firebase-service-account.json` in server folder
-5. Get web config → update client `.env` file
+4. Download the service account JSON and save it as `server/firebase-service-account.json`
+5. Update `client/.env` with your Firebase web config
+6. Add your Cloudflare tunnel domain to Firebase Authorized Domains if needed
 
----
+## 5. If You Only Want to Verify the Backend
 
-## Quick Test Without Firebase
-
-You can test the database connection first:
-
-1. Fix MySQL password in `.env`
+1. Fix the MySQL password
 2. Create the database
-3. Start the server
-4. You should see "Database initialized" without errors
+3. Start the backend
+4. Confirm the console shows `Database initialized`
 
-Then we can add Firebase later!
+Then start the frontend and Cloudflare tunnel.

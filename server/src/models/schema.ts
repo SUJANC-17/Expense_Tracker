@@ -22,6 +22,14 @@ export const initializeDatabase = (): void => {
       db.exec('ALTER TABLE users ADD COLUMN username TEXT');
     } catch (e) { /* Column probably already exists */ }
 
+    try {
+      db.exec("ALTER TABLE users ADD COLUMN reminder_enabled INTEGER NOT NULL DEFAULT 1");
+    } catch (e) { /* Column probably already exists */ }
+
+    try {
+      db.exec("ALTER TABLE users ADD COLUMN reminder_time TEXT NOT NULL DEFAULT '21:00'");
+    } catch (e) { /* Column probably already exists */ }
+
     // Create categories table
     db.exec(`
       CREATE TABLE IF NOT EXISTS categories (

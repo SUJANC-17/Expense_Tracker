@@ -17,8 +17,10 @@ import {
     FileText,
     UserPlus,
     LogOut,
+    Settings2,
 } from "lucide-react";
 import { SkeletonLoader } from "./components/SkeletonLoader";
+import { Settings } from "./components/Settings";
 
 const Dashboard = lazy(() => import("./components/Dashboard").then((module) => ({ default: module.Dashboard })));
 const IncomeManager = lazy(() => import("./components/IncomeManager").then((module) => ({ default: module.IncomeManager })));
@@ -32,7 +34,8 @@ type TabValue =
     | "income"
     | "expenses"
     | "splits"
-    | "reports";
+    | "reports"
+    | "settings";
 
 export default function UserApp() {
     console.log("UserApp component initializing...");
@@ -61,6 +64,10 @@ export default function UserApp() {
     } = useData(user?.id);
 
     const [activeTab, setActiveTab] = useState<TabValue>(() => {
+        const urlTab = new URLSearchParams(window.location.search).get('tab');
+        if (urlTab === 'dashboard' || urlTab === 'income' || urlTab === 'expenses' || urlTab === 'splits' || urlTab === 'reports' || urlTab === 'settings') {
+            return urlTab;
+        }
         return (sessionStorage.getItem('expenseTracker_activeTab') as TabValue) || 'dashboard';
     });
 
@@ -109,7 +116,7 @@ export default function UserApp() {
                     onValueChange={handleTabChange}
                     className="w-full"
                 >
-                    <TabsList className="grid w-full grid-cols-6 mb-8 bg-white/10 backdrop-blur-xl border border-white/20">
+                    <TabsList className="grid w-full grid-cols-7 mb-8 bg-white/10 backdrop-blur-xl border border-white/20">
                         <TabsTrigger
                             value="dashboard"
                             className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
@@ -153,6 +160,13 @@ export default function UserApp() {
                         >
                             <FileText className="w-4 h-4 mr-2" />
                             <span className="hidden sm:inline">Reports</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="settings"
+                            className="data-[state=active]:bg-white/20 data-[state=active]:text-white text-gray-300"
+                        >
+                            <Settings2 className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Settings</span>
                         </TabsTrigger>
                     </TabsList>
 
@@ -212,6 +226,10 @@ export default function UserApp() {
                                 expenses={expenses}
                                 splits={splits}
                             />
+                        </TabsContent>
+
+                        <TabsContent value="settings" className="mt-0">
+                            <Settings />
                         </TabsContent>
                     </Suspense>
                 </Tabs>

@@ -6,6 +6,22 @@ dotenv.config();
 const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
 const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER;
+const frontendBaseUrl = (
+  process.env.APP_FRONTEND_URL ||
+  process.env.PUBLIC_APP_URL ||
+  process.env.FRONTEND_URL ||
+  'https://expensetrack.qzz.io'
+).replace(/\/$/, '');
+const settingsUrl = `${frontendBaseUrl}/?tab=settings`;
+
+const escapeHtml = (value: string): string => {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -111,6 +127,56 @@ export const sendLoginNotification = async (email: string): Promise<void> => {
   } catch (error) {
     console.error('Error sending login notification:', error);
     // Don't throw error to avoid blocking the login flow
+  }
+};
+
+export const sendDailyReminderEmail = async (
+  email: string,
+  username: string,
+  reminderTime: string
+): Promise<void> => {
+  try {
+    const safeUsername = escapeHtml(username || 'there');
+    const safeReminderTime = escapeHtml(reminderTime);
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: email,
+      subject: 'ExpenseTrack Daily Reminder',
+      html: `
+        <div style="margin:0;padding:0;background:#0f172a;">
+          <div style="max-width:640px;margin:0 auto;padding:32px 20px;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0;">
+            <div style="background:linear-gradient(135deg,#111827 0%,#1e293b 100%);border:1px solid rgba(148,163,184,0.2);border-radius:20px;padding:32px;">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+                <div style="width:44px;height:44px;border-radius:12px;background:#22c55e;display:flex;align-items:center;justify-content:center;color:#052e16;font-weight:700;font-size:20px;">E</div>
+                <div>
+                  <div style="font-size:14px;color:#94a3b8;letter-spacing:0.08em;text-transform:uppercase;">ExpenseTrack</div>
+                  <div style="font-size:24px;font-weight:700;color:#f8fafc;">Daily reminder</div>
+                </div>
+              </div>
+              <p style="font-size:16px;line-height:1.6;color:#cbd5e1;margin:0 0 16px;">Hi ${safeUsername},</p>
+              <p style="font-size:16px;line-height:1.6;color:#cbd5e1;margin:0 0 16px;">
+                It&apos;s your scheduled reminder at <strong style="color:#f8fafc;">${safeReminderTime}</strong>.
+                You haven&apos;t logged any expense today yet.
+              </p>
+              <p style="font-size:16px;line-height:1.6;color:#cbd5e1;margin:0 0 24px;">
+                Open your settings to change reminder time or disable this message whenever you want.
+              </p>
+              <div style="margin:28px 0 18px;">
+                <a href="${settingsUrl}" style="display:inline-block;background:#22c55e;color:#052e16;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700;font-size:15px;">
+                  Open Reminder Settings
+                </a>
+              </div>
+              <p style="font-size:12px;line-height:1.5;color:#94a3b8;margin:0;">
+                If you already logged an expense, you can ignore this email.
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error('Error sending daily reminder email:', error);
+    throw error;
   }
 };
 

@@ -13,17 +13,41 @@ import summaryRoutes from './routes/summary.js';
 import friendRoutes from './routes/friend.js';
 import adminRoutes from './routes/admin.js';
 import reportsRoutes from './routes/reports.js';
+import reminderRoutes from './routes/reminder.js';
 import { authenticateToken } from './middleware/auth.js';
 import type { AuthRequest } from './middleware/auth.js';
+import { startDailyReminderScheduler } from './services/dailyReminderScheduler.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+    'https://expensetrack.qzz.io',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]);
+
+const allowedOrigins = new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...(process.env.CORS_ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+]);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.has(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(null, false);
+    },
+}));
 app.use(express.json());
 
 // Initialize database
@@ -37,6 +61,7 @@ try {
 // Start monthly report scheduler
 startMonthlyReportScheduler();
 startCleanupScheduler();
+startDailyReminderScheduler();
 
 // Routes
 app.get('/', (req: Request, res: Response) => {
@@ -60,6 +85,7 @@ app.use('/api/summary', summaryRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', reminderRoutes);
 
 // Manual report generation endpoint
 app.post('/api/reports/generate', authenticateToken, async (req: AuthRequest, res: Response) => {

@@ -34,7 +34,7 @@ A comprehensive full-stack expense tracking application with Firebase authentica
 - Node.js (v18 or higher)
 - MySQL Server
 - Firebase Project
-- SMTP Email Account (Gmail recommended)
+- SMTP Email Account (Zoho recommended for reminders)
 
 ## Setup Instructions
 
@@ -55,6 +55,38 @@ The application will automatically create the required tables on first run.
 3. Download the service account JSON file for backend
 4. Get the Firebase config for frontend
 
+### Cloudflare Named Tunnel Setup
+
+1. Log in to Cloudflare and authorize the tunnel:
+
+```bash
+cloudflared tunnel login
+```
+
+2. Create the named tunnel:
+
+```bash
+cloudflared tunnel create expensetrack
+```
+
+3. Route DNS to the tunnel:
+
+```bash
+cloudflared tunnel route dns expensetrack expensetrack.qzz.io
+```
+
+4. Create `C:\Users\<YourUsername>\.cloudflared\config.yml`:
+
+```yaml
+tunnel: expensetrack
+credentials-file: C:\Users\<YourUsername>\.cloudflared\<UUID>.json
+
+ingress:
+  - hostname: expensetrack.qzz.io
+    service: http://localhost:5173
+  - service: http_status:404
+```
+
 ### 3. Backend Configuration
 
 Navigate to the server directory:
@@ -74,11 +106,16 @@ DB_PASSWORD=your_mysql_password
 DB_NAME=expense_tracker
 DB_PORT=3306
 FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
-SMTP_HOST=smtp.gmail.com
+SMTP_HOST=smtp.zoho.com
 SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_gmail_app_password
+SMTP_SECURE=false
+SMTP_USER=no-reply@yourdomain.com
+SMTP_PASS=your_zoho_app_password
+SMTP_FROM=no-reply@yourdomain.com
+APP_FRONTEND_URL=https://expensetrack.qzz.io
 ```
+
+For local-only development, you can keep `APP_FRONTEND_URL=http://localhost:5173`.
 
 Place your Firebase service account JSON file in the `server` directory.
 
@@ -94,7 +131,7 @@ npm install
 Create `.env` file in `client` directory:
 
 ```env
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=/api
 VITE_FIREBASE_API_KEY=your_firebase_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=your_project_id
@@ -122,6 +159,20 @@ npm run dev
 ```
 
 Frontend will run on `http://localhost:5173`
+
+### Start Named Tunnel
+
+Run the tunnel helper:
+
+```bat
+start_cloudflare.bat
+```
+
+Or start the tunnel only with:
+
+```bash
+bash start_cloudflare.sh
+```
 
 ## API Endpoints
 
@@ -157,6 +208,10 @@ Frontend will run on `http://localhost:5173`
 - `POST /api/reports/generate` - Manually generate and email report
 
 ## Automated Features
+
+### Daily Email Reminders
+
+Users can opt in to a daily reminder email if they have not logged any expense yet. The reminder time is configurable from Settings.
 
 ### Monthly Report Scheduler
 
