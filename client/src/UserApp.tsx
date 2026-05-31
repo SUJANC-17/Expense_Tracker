@@ -1,12 +1,32 @@
-import { lazy, Suspense, useState } from "react";
-import { useAuth } from "./hooks/useAuth";
-import { useData } from "./hooks/useData";
-import { AuthForm } from "./components/AuthForm";
-import { Button } from "./components/ui/button";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
+import { useAuth } from './hooks/useAuth';
+import { useData } from './hooks/useData';
+import { AuthForm } from './components/AuthForm';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { Button } from './components/ui/button';
+import { Tabs, TabsContent } from './components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
 import {
-    Tabs,
-    TabsContent,
-} from "./components/ui/tabs";
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    DropdownMenuItem,
+} from './components/ui/dropdown-menu';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from './components/ui/dialog';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from './components/ui/input-otp';
+import { Input } from './components/ui/input';
+import { Label } from './components/ui/label';
+import { SkeletonLoader } from './components/SkeletonLoader';
+import { apiClient } from './utils/api';
 import {
     LayoutDashboard,
     TrendingUp,
@@ -15,44 +35,85 @@ import {
     FileText,
     UserPlus,
     LogOut,
-    Settings2,
     Menu,
     X,
-} from "lucide-react";
-import { SkeletonLoader } from "./components/SkeletonLoader";
-import { Settings } from "./components/Settings";
+    ChevronDown,
+    BellRing,
+    Clock3,
+    ShieldCheck,
+    Trash2,
+    Heart,
+    Loader2,
+    KeyRound,
+    Link2,
+} from 'lucide-react';
+import type { ReminderSettings } from './appTypes';
 
-const Dashboard = lazy(() => import("./components/Dashboard").then((module) => ({ default: module.Dashboard })));
-const IncomeManager = lazy(() => import("./components/IncomeManager").then((module) => ({ default: module.IncomeManager })));
-const ExpenseManager = lazy(() => import("./components/ExpenseManager").then((module) => ({ default: module.ExpenseManager })));
-const SplitManager = lazy(() => import("./components/SplitManager").then((module) => ({ default: module.SplitManager })));
-const FriendsManager = lazy(() => import("./components/FriendsManager").then((module) => ({ default: module.FriendsManager })));
-const Reports = lazy(() => import("./components/Reports").then((module) => ({ default: module.Reports })));
+const Dashboard = lazy(() => import('./components/Dashboard').then((module) => ({ default: module.Dashboard })));
+const IncomeManager = lazy(() => import('./components/IncomeManager').then((module) => ({ default: module.IncomeManager })));
+const ExpenseManager = lazy(() => import('./components/ExpenseManager').then((module) => ({ default: module.ExpenseManager })));
+const SplitManager = lazy(() => import('./components/SplitManager').then((module) => ({ default: module.SplitManager })));
+const FriendsManager = lazy(() => import('./components/FriendsManager').then((module) => ({ default: module.FriendsManager })));
+const Reports = lazy(() => import('./components/Reports').then((module) => ({ default: module.Reports })));
 
-type TabValue =
-    | "dashboard"
-    | "income"
-    | "expenses"
-    | "splits"
-    | "friends"
-    | "reports"
-    | "settings";
+type TabValue = 'dashboard' | 'income' | 'expenses' | 'splits' | 'friends' | 'reports';
 
 const navItems = [
-    { value: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { value: "income", label: "Income", icon: TrendingUp },
-    { value: "expenses", label: "Expenses", icon: TrendingDown },
-    { value: "splits", label: "Splits", icon: Users },
-    { value: "friends", label: "Friends", icon: UserPlus },
-    { value: "reports", label: "Reports", icon: FileText },
-    { value: "settings", label: "Settings", icon: Settings2 },
+    { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { value: 'income', label: 'Income', icon: TrendingUp },
+    { value: 'expenses', label: 'Expenses', icon: TrendingDown },
+    { value: 'splits', label: 'Splits', icon: Users },
+    { value: 'friends', label: 'Friends', icon: UserPlus },
+    { value: 'reports', label: 'Reports', icon: FileText },
 ] as const;
 
+const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
+    reminderEnabled: true,
+    reminderTime: '21:00',
+};
+
+function getInitials(name?: string, email?: string) {
+    const base = (name || email || 'U').trim();
+    const parts = base.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0][0] || 'U'}${parts[1][0] || ''}`.toUpperCase();
+    return base.slice(0, 2).toUpperCase();
+}
+
+function isTabValue(value: string | null): value is TabValue {
+    return value === 'dashboard' || value === 'income' || value === 'expenses' || value === 'splits' || value === 'friends' || value === 'reports';
+}
+
+function hasProvider(user: { providerIds?: string[]; hasPassword?: boolean; hasGoogle?: boolean } | null, providerId: 'password' | 'google.com') {
+    if (!user) return false;
+    if (providerId === 'password') return Boolean(user.hasPassword || user.providerIds?.includes('password'));
+    return Boolean(user.hasGoogle || user.providerIds?.includes('google.com'));
+}
+
 export default function UserApp() {
-    console.log("UserApp component initializing...");
-    const { user, loading, login, signup, loginWithGoogle, logout } = useAuth();
-    console.log("Auth state:", { user: !!user, loading });
+    const {
+        user,
+        loading,
+        login,
+        requestSignupOtp,
+        verifySignupOtp,
+        loginWithGoogle,
+        linkGoogle,
+        requestPasswordChangeOtp,
+        verifyPasswordChangeOtp,
+        requestSetPasswordOtp,
+        verifySetPasswordOtp,
+        deleteAccount,
+        logout,
+    } = useAuth();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<TabValue>(() => {
+        const urlTab = new URLSearchParams(window.location.search).get('tab');
+        if (isTabValue(urlTab)) {
+            return urlTab;
+        }
+        const storedTab = sessionStorage.getItem('expenseTracker_activeTab');
+        return isTabValue(storedTab) ? storedTab : 'dashboard';
+    });
 
     const {
         incomes,
@@ -75,18 +136,200 @@ export default function UserApp() {
         deleteFriend,
     } = useData(user?.id);
 
-    const [activeTab, setActiveTab] = useState<TabValue>(() => {
-        const urlTab = new URLSearchParams(window.location.search).get('tab');
-        if (urlTab === 'dashboard' || urlTab === 'income' || urlTab === 'expenses' || urlTab === 'splits' || urlTab === 'friends' || urlTab === 'reports' || urlTab === 'settings') {
-            return urlTab;
+    const [showReminderDialog, setShowReminderDialog] = useState(false);
+    const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showDonationDialog, setShowDonationDialog] = useState(false);
+    const [reminderLoading, setReminderLoading] = useState(false);
+    const [reminderSaving, setReminderSaving] = useState(false);
+    const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(DEFAULT_REMINDER_SETTINGS);
+    const [passwordStep, setPasswordStep] = useState<'request' | 'verify'>('request');
+    const [passwordMode, setPasswordMode] = useState<'set' | 'change'>('change');
+    const [passwordChallengeId, setPasswordChallengeId] = useState('');
+    const [passwordChallengeExpiresInMinutes, setPasswordChallengeExpiresInMinutes] = useState(10);
+    const [passwordOtp, setPasswordOtp] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [googleLinking, setGoogleLinking] = useState(false);
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
+
+    useEffect(() => {
+        if (!user) {
+            setMobileMenuOpen(false);
+            setShowReminderDialog(false);
+            setShowPrivacyPolicy(false);
+            setShowPasswordDialog(false);
+            setShowDeleteDialog(false);
+            setShowDonationDialog(false);
         }
-        return (sessionStorage.getItem('expenseTracker_activeTab') as TabValue) || 'dashboard';
-    });
+    }, [user]);
+
+    useEffect(() => {
+        const active = () => {
+            if (!showReminderDialog || !user) return;
+
+            let cancelled = false;
+            const load = async () => {
+                setReminderLoading(true);
+                try {
+                    const data = await apiClient.get('/reminder-settings') as ReminderSettings;
+                    if (cancelled) return;
+                    setReminderSettings({
+                        reminderEnabled: Boolean(data?.reminderEnabled ?? true),
+                        reminderTime: data?.reminderTime || DEFAULT_REMINDER_SETTINGS.reminderTime,
+                    });
+                } catch (error) {
+                    console.error('Failed to load reminder settings:', error);
+                    toast.error('Could not load reminder settings');
+                } finally {
+                    if (!cancelled) setReminderLoading(false);
+                }
+            };
+
+            load();
+            return () => {
+                cancelled = true;
+            };
+        };
+
+        return active();
+    }, [showReminderDialog, user]);
 
     const handleTabChange = (value: string) => {
-        setActiveTab(value as TabValue);
-        sessionStorage.setItem('expenseTracker_activeTab', value);
+        const next = value as TabValue;
+        setActiveTab(next);
+        sessionStorage.setItem('expenseTracker_activeTab', next);
         setMobileMenuOpen(false);
+    };
+
+    const handleSaveReminder = async () => {
+        setReminderSaving(true);
+        try {
+            const updated = await apiClient.put('/reminder-settings', reminderSettings) as ReminderSettings;
+            setReminderSettings({
+                reminderEnabled: Boolean(updated?.reminderEnabled ?? reminderSettings.reminderEnabled),
+                reminderTime: updated?.reminderTime || reminderSettings.reminderTime,
+            });
+            toast.success('Reminder settings saved');
+            setShowReminderDialog(false);
+        } catch (error) {
+            console.error('Failed to save reminder settings:', error);
+            toast.error('Failed to save reminder settings');
+        } finally {
+            setReminderSaving(false);
+        }
+    };
+
+    const openPasswordDialog = (mode: 'set' | 'change') => {
+        setPasswordMode(mode);
+        setPasswordStep('request');
+        setPasswordChallengeId('');
+        setPasswordChallengeExpiresInMinutes(10);
+        setPasswordOtp('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordError('');
+        setPasswordSuccess('');
+        setShowPasswordDialog(true);
+    };
+
+    const handleRequestPasswordOtp = async () => {
+        setPasswordError('');
+
+        if (!newPassword || !confirmPassword) {
+            setPasswordError('Enter and confirm your new password first');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setPasswordError('New password must be at least 6 characters');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordError('Passwords do not match');
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            const challenge = passwordMode === 'set'
+                ? await requestSetPasswordOtp()
+                : await requestPasswordChangeOtp();
+            setPasswordChallengeId(challenge.challengeId);
+            setPasswordChallengeExpiresInMinutes(challenge.expiresInMinutes);
+            setPasswordOtp('');
+            setPasswordStep('verify');
+            setPasswordSuccess(`A verification code was sent to ${user?.email}.`);
+        } catch (error) {
+            setPasswordError(error instanceof Error ? error.message : 'Failed to send verification code');
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
+    const handleResendPasswordOtp = async () => {
+        await handleRequestPasswordOtp();
+    };
+
+    const handleVerifyPasswordChange = async (event: FormEvent) => {
+        event.preventDefault();
+        setPasswordError('');
+
+        if (newPassword.length < 6) {
+            setPasswordError('New password must be at least 6 characters');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordError('Passwords do not match');
+            return;
+        }
+
+        if (passwordOtp.length !== 6) {
+            setPasswordError('Enter the 6-digit verification code');
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            if (passwordMode === 'set') {
+                await verifySetPasswordOtp(passwordChallengeId, passwordOtp, newPassword);
+                toast.success('Password set successfully');
+            } else {
+                await verifyPasswordChangeOtp(passwordChallengeId, passwordOtp, newPassword);
+                toast.success('Password updated successfully');
+            }
+            setShowPasswordDialog(false);
+        } catch (error) {
+            setPasswordError(error instanceof Error ? error.message : 'Failed to update password');
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
+    const handleLinkGoogle = async () => {
+        setGoogleLinking(true);
+        try {
+            await linkGoogle();
+            toast.success('Google account linked successfully');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to link Google');
+        } finally {
+            setGoogleLinking(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        try {
+            await deleteAccount();
+            toast.success('Account deleted');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to delete account');
+        }
     };
 
     if (loading || dataLoading) {
@@ -94,17 +337,24 @@ export default function UserApp() {
     }
 
     if (!user) {
-        return <AuthForm onLogin={login} onSignup={signup} onLoginWithGoogle={loginWithGoogle} />;
+        return (
+            <AuthForm
+                onLogin={login}
+                onRequestSignupOtp={requestSignupOtp}
+                onVerifySignupOtp={verifySignupOtp}
+                onLoginWithGoogle={loginWithGoogle}
+            />
+        );
     }
 
     return (
         <>
             <div className="mesh-bg-container">
-                <div className="mesh-blob-1"></div>
-                <div className="mesh-blob-2"></div>
-                <div className="mesh-blob-3"></div>
+                <div className="mesh-blob-1" />
+                <div className="mesh-blob-2" />
+                <div className="mesh-blob-3" />
             </div>
-            
+
             <div className="min-h-screen">
                 <div className="container mx-auto p-4 md:p-8">
                     <div className="mb-8 rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/10">
@@ -126,12 +376,12 @@ export default function UserApp() {
                                             type="button"
                                             onClick={() => handleTabChange(item.value)}
                                             className={[
-                                                "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap",
+                                                'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
                                                 isActive
-                                                    ? "border-white/30 bg-white/20 text-white shadow-lg shadow-black/10"
-                                                    : "border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white",
-                                            ].join(" ")}
-                                            aria-current={isActive ? "page" : undefined}
+                                                    ? 'border-white/30 bg-white/20 text-white shadow-lg shadow-black/10'
+                                                    : 'border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white',
+                                            ].join(' ')}
+                                            aria-current={isActive ? 'page' : undefined}
                                         >
                                             <Icon className="h-4 w-4" />
                                             {item.label}
@@ -140,26 +390,137 @@ export default function UserApp() {
                                 })}
                             </div>
 
-                            <div className="hidden items-center gap-3 md:flex">
-                                <Button
-                                    onClick={logout}
-                                    variant="default"
-                                    className="border-transparent bg-red-600 text-white hover:bg-red-700"
-                                >
-                                    <LogOut className="mr-2 h-4 w-4" />
-                                    Logout
-                                </Button>
-                            </div>
+                            <div className="flex items-center gap-3">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-2 py-1.5 text-left text-white transition hover:bg-white/15"
+                                        >
+                                            <Avatar className="h-10 w-10 border border-white/20">
+                                                <AvatarImage src={user.photoURL || undefined} alt={user.username} />
+                                                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                                                    {getInitials(user.username, user.email)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <ChevronDown className="h-4 w-4 text-gray-300" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-80 border-white/15 bg-slate-950/95 text-white backdrop-blur-xl">
+                                        <DropdownMenuLabel className="space-y-1 px-3 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 border border-white/20">
+                                                    <AvatarImage src={user.photoURL || undefined} alt={user.username} />
+                                                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                                                        {getInitials(user.username, user.email)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-semibold text-white">{user.username}</p>
+                                                    <p className="truncate text-xs text-gray-400">{user.email}</p>
+                                                </div>
+                                            </div>
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator className="bg-white/10" />
+                                        {hasProvider(user, 'password') ? (
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    openPasswordDialog('change');
+                                                }}
+                                            >
+                                                <KeyRound className="h-4 w-4 text-purple-300" />
+                                                Change Password
+                                            </DropdownMenuItem>
+                                        ) : (
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    openPasswordDialog('set');
+                                                }}
+                                            >
+                                                <KeyRound className="h-4 w-4 text-purple-300" />
+                                                Set Password
+                                            </DropdownMenuItem>
+                                        )}
+                                        {!hasProvider(user, 'google.com') && (
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    void handleLinkGoogle();
+                                                }}
+                                            >
+                                                <Link2 className="h-4 w-4 text-sky-300" />
+                                                {googleLinking ? 'Linking Google...' : 'Link Google'}
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                setShowReminderDialog(true);
+                                            }}
+                                        >
+                                            <BellRing className="h-4 w-4 text-emerald-300" />
+                                            Reminder Time
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                setShowDonationDialog(true);
+                                            }}
+                                        >
+                                            <Heart className="h-4 w-4 text-rose-300" />
+                                            Support Us
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                setShowPrivacyPolicy(true);
+                                            }}
+                                        >
+                                            <ShieldCheck className="h-4 w-4 text-sky-300" />
+                                            Privacy Policy
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-red-300 focus:bg-red-500/10 focus:text-red-200"
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                setShowDeleteDialog(true);
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            Delete Account
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="bg-white/10" />
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                logout();
+                                            }}
+                                        >
+                                            <LogOut className="h-4 w-4 text-gray-300" />
+                                            Logout
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
 
-                            <button
-                                type="button"
-                                onClick={() => setMobileMenuOpen((open) => !open)}
-                                className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15 md:hidden"
-                                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-                                aria-expanded={mobileMenuOpen}
-                            >
-                                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                            </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileMenuOpen((open) => !open)}
+                                    className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15 md:hidden"
+                                    aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                                    aria-expanded={mobileMenuOpen}
+                                >
+                                    {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                                </button>
+                            </div>
                         </div>
 
                         {mobileMenuOpen && (
@@ -174,102 +535,364 @@ export default function UserApp() {
                                                 type="button"
                                                 onClick={() => handleTabChange(item.value)}
                                                 className={[
-                                                    "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-all",
+                                                    'flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-all',
                                                     isActive
-                                                        ? "border-white/30 bg-white/20 text-white"
-                                                        : "border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10 hover:text-white",
-                                                ].join(" ")}
-                                                aria-current={isActive ? "page" : undefined}
+                                                        ? 'border-white/30 bg-white/20 text-white'
+                                                        : 'border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10 hover:text-white',
+                                                ].join(' ')}
+                                                aria-current={isActive ? 'page' : undefined}
                                             >
                                                 <Icon className="h-4 w-4" />
                                                 {item.label}
                                             </button>
                                         );
                                     })}
-
-                                    <button
-                                        type="button"
-                                        onClick={logout}
-                                        className="mt-2 inline-flex items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-200 transition hover:bg-red-500/20 hover:text-white"
-                                    >
-                                        <LogOut className="h-4 w-4" />
-                                        Logout
-                                    </button>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                <Tabs
-                    value={activeTab}
-                    onValueChange={handleTabChange}
-                    className="w-full"
-                >
-                    <Suspense fallback={<SkeletonLoader />}>
-                        <TabsContent value="dashboard" className="mt-0">
-                            <Dashboard
-                                incomes={incomes}
-                                expenses={expenses}
-                                splits={splits}
-                            />
-                        </TabsContent>
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+                        <Suspense fallback={<SkeletonLoader />}>
+                            <TabsContent value="dashboard" className="mt-0">
+                                <Dashboard incomes={incomes} expenses={expenses} splits={splits} />
+                            </TabsContent>
 
-                        <TabsContent value="income" className="mt-0">
-                            <IncomeManager
-                                incomes={incomes}
-                                userId={user.id}
-                                onAdd={addIncome}
-                                onUpdate={updateIncome}
-                                onDelete={deleteIncome}
-                            />
-                        </TabsContent>
+                            <TabsContent value="income" className="mt-0">
+                                <IncomeManager
+                                    incomes={incomes}
+                                    userId={user.id}
+                                    onAdd={addIncome}
+                                    onUpdate={updateIncome}
+                                    onDelete={deleteIncome}
+                                />
+                            </TabsContent>
 
-                        <TabsContent value="expenses" className="mt-0">
-                            <ExpenseManager
-                                expenses={expenses}
-                                userId={user.id}
-                                onAdd={addExpense}
-                                onUpdate={updateExpense}
-                                onDelete={deleteExpense}
-                            />
-                        </TabsContent>
+                            <TabsContent value="expenses" className="mt-0">
+                                <ExpenseManager
+                                    expenses={expenses}
+                                    userId={user.id}
+                                    onAdd={addExpense}
+                                    onUpdate={updateExpense}
+                                    onDelete={deleteExpense}
+                                />
+                            </TabsContent>
 
-                        <TabsContent value="splits" className="mt-0">
-                            <SplitManager
-                                splits={splits}
-                                userId={user.id}
-                                onAdd={addSplit}
-                                onAddBulk={addSplitBulk}
-                                onUpdate={updateSplit}
-                                onDelete={deleteSplit}
-                                onMarkPaid={markSplitPaid}
-                                friends={friends}
-                            />
-                        </TabsContent>
+                            <TabsContent value="splits" className="mt-0">
+                                <SplitManager
+                                    splits={splits}
+                                    userId={user.id}
+                                    onAdd={addSplit}
+                                    onAddBulk={addSplitBulk}
+                                    onUpdate={updateSplit}
+                                    onDelete={deleteSplit}
+                                    onMarkPaid={markSplitPaid}
+                                    friends={friends}
+                                />
+                            </TabsContent>
 
-                        <TabsContent value="friends" className="mt-0">
-                            <FriendsManager
-                                friends={friends}
-                                onAdd={addFriend}
-                                onDelete={deleteFriend}
-                            />
-                        </TabsContent>
+                            <TabsContent value="friends" className="mt-0">
+                                <FriendsManager friends={friends} onAdd={addFriend} onDelete={deleteFriend} />
+                            </TabsContent>
 
-                        <TabsContent value="reports" className="mt-0">
-                            <Reports
-                                incomes={incomes}
-                                expenses={expenses}
-                                splits={splits}
-                            />
-                        </TabsContent>
-
-                        <TabsContent value="settings" className="mt-0">
-                            <Settings />
-                        </TabsContent>
-                    </Suspense>
-                </Tabs>
+                            <TabsContent value="reports" className="mt-0">
+                                <Reports incomes={incomes} expenses={expenses} splits={splits} />
+                            </TabsContent>
+                        </Suspense>
+                    </Tabs>
+                </div>
             </div>
-        </div>
+
+            <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+                <DialogContent className="border-white/15 bg-slate-950 text-white sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-white flex items-center gap-2">
+                            <Clock3 className="h-5 w-5 text-emerald-300" />
+                            Reminder Time
+                        </DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                            Move your reminder settings here. Your email reminder stays available without a separate settings page.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-5">
+                        {reminderLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading reminder settings...
+                            </div>
+                        ) : (
+                            <>
+                                <div className="space-y-2">
+                                    <Label className="text-gray-200">Reminder time</Label>
+                                    <Input
+                                        type="time"
+                                        value={reminderSettings.reminderTime}
+                                        onChange={(e) => setReminderSettings((prev) => ({ ...prev, reminderTime: e.target.value }))}
+                                        className="border-white/15 bg-white/5 text-white"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
+                                    <div>
+                                        <p className="flex items-center gap-2 text-sm font-medium text-white">
+                                            <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                                            Enable daily reminder
+                                        </p>
+                                        <p className="text-xs text-gray-400">
+                                            Send a reminder if no expense has been logged by this time.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant={reminderSettings.reminderEnabled ? 'default' : 'outline'}
+                                        onClick={() => setReminderSettings((prev) => ({ ...prev, reminderEnabled: !prev.reminderEnabled }))}
+                                        className={reminderSettings.reminderEnabled ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400' : 'border-white/15 bg-white/5 text-white hover:bg-white/10'}
+                                    >
+                                        {reminderSettings.reminderEnabled ? 'Enabled' : 'Disabled'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                        <div className="flex gap-3">
+                            <Button
+                                type="button"
+                                onClick={handleSaveReminder}
+                                disabled={reminderSaving || reminderLoading}
+                                className="flex-1 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                            >
+                                {reminderSaving ? 'Saving...' : 'Save reminder'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowReminderDialog(false)}
+                                className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+                <DialogContent className="border-white/15 bg-slate-950 text-white sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-white flex items-center gap-2">
+                            <KeyRound className="h-5 w-5 text-purple-300" />
+                            {passwordMode === 'set' ? 'Set Password' : 'Change Password'}
+                        </DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                            {passwordMode === 'set'
+                                ? 'Verify your email before setting a password on this Google account.'
+                                : 'Verify your email before changing the password on your Firebase account.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {passwordError && (
+                            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+                                {passwordError}
+                            </div>
+                        )}
+                        {passwordSuccess && (
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                                {passwordSuccess}
+                            </div>
+                        )}
+
+                        {passwordStep === 'request' ? (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-300">
+                                    {passwordMode === 'set'
+                                        ? `Enter your new password first, then send a 6-digit code to ${user.email}.`
+                                        : `Enter your new password first, then send a 6-digit code to ${user.email}.`}
+                                </p>
+                                <div className="space-y-2">
+                                    <Label className="text-gray-200">New password</Label>
+                                    <Input
+                                        type="password"
+                                        name="newPassword"
+                                        autoComplete="new-password"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        className="border-white/15 bg-white/5 text-white"
+                                        placeholder="Enter new password"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-gray-200">Confirm password</Label>
+                                    <Input
+                                        type="password"
+                                        name="confirmPassword"
+                                        autoComplete="new-password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        className="border-white/15 bg-white/5 text-white"
+                                        placeholder="Confirm new password"
+                                    />
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <Button
+                                        type="button"
+                                        onClick={handleRequestPasswordOtp}
+                                        disabled={passwordLoading}
+                                        className="flex-1 bg-purple-500 text-white hover:bg-purple-400"
+                                    >
+                                        {passwordLoading ? 'Sending code...' : 'Send verification code'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setShowPasswordDialog(false)}
+                                        className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleVerifyPasswordChange} className="space-y-4">
+                                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-gray-300">
+                                    Code sent to {user.email}. Use the same password you entered before requesting the OTP. It expires in {passwordChallengeExpiresInMinutes} minutes.
+                                </div>
+                                <input
+                                    type="text"
+                                    name="username"
+                                    autoComplete="username"
+                                    value={user.email}
+                                    readOnly
+                                    tabIndex={-1}
+                                    aria-hidden="true"
+                                    className="sr-only"
+                                />
+                                <input
+                                    type="password"
+                                    name="new-password"
+                                    autoComplete="new-password"
+                                    value={newPassword}
+                                    readOnly
+                                    tabIndex={-1}
+                                    aria-hidden="true"
+                                    className="sr-only"
+                                />
+                                <InputOTP
+                                    maxLength={6}
+                                    value={passwordOtp}
+                                    onChange={setPasswordOtp}
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    pattern="\d*"
+                                >
+                                    <InputOTPGroup className="justify-center gap-2">
+                                        <InputOTPSlot index={0} className="border-white/20" />
+                                        <InputOTPSlot index={1} className="border-white/20" />
+                                        <InputOTPSlot index={2} className="border-white/20" />
+                                        <InputOTPSlot index={3} className="border-white/20" />
+                                        <InputOTPSlot index={4} className="border-white/20" />
+                                        <InputOTPSlot index={5} className="border-white/20" />
+                                    </InputOTPGroup>
+                                </InputOTP>
+
+                                <div className="flex gap-3">
+                                    <Button
+                                        type="submit"
+                                        disabled={passwordLoading}
+                                        className="flex-1 bg-purple-500 text-white hover:bg-purple-400"
+                                    >
+                                        {passwordLoading ? 'Updating...' : 'Update password'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleResendPasswordOtp}
+                                        disabled={passwordLoading}
+                                        className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                                    >
+                                        Resend code
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setShowPasswordDialog(false)}
+                                        className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <DialogContent className="border-white/15 bg-slate-950 text-white sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-white flex items-center gap-2">
+                            <Trash2 className="h-5 w-5 text-red-300" />
+                            Delete Account
+                        </DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                            This deletes your Firebase account and all expense data permanently. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
+                            Type of deletion: permanent account removal.
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                type="button"
+                                onClick={handleDeleteAccount}
+                                className="flex-1 bg-red-500 text-white hover:bg-red-400"
+                            >
+                                Delete permanently
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowDeleteDialog(false)}
+                                className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showDonationDialog} onOpenChange={setShowDonationDialog}>
+                <DialogContent className="border-white/15 bg-slate-950 text-white sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="text-white flex items-center gap-2">
+                            <Heart className="h-5 w-5 text-rose-300" />
+                            Support Expense Tracker
+                        </DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                            Support options are coming soon.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-200">
+                            Coming soon. We are preparing a clean support flow for donations and tips.
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                type="button"
+                                onClick={() => setShowDonationDialog(false)}
+                                className="flex-1 bg-white/10 text-white hover:bg-white/15"
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {showPrivacyPolicy && (
+                <PrivacyPolicy onClose={() => setShowPrivacyPolicy(false)} />
+            )}
         </>
     );
 }

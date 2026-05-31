@@ -13,6 +13,28 @@ export const initializeDatabase = (): void => {
       )
     `);
 
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    if (userColumns.some((column) => column.name === 'phone_number')) {
+      db.transaction(() => {
+        db.exec('ALTER TABLE users RENAME TO users_legacy');
+        db.exec(`
+          CREATE TABLE users (
+            id TEXT PRIMARY KEY,
+            username TEXT,
+            email TEXT UNIQUE NOT NULL,
+            last_active_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+            created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
+          )
+        `);
+        db.exec(`
+          INSERT INTO users (id, username, email, last_active_at, created_at)
+          SELECT id, username, email, last_active_at, created_at
+          FROM users_legacy
+        `);
+        db.exec('DROP TABLE users_legacy');
+      })();
+    }
+
     // Add last_active_at if it doesn't exist
     try {
       db.exec("ALTER TABLE users ADD COLUMN last_active_at DATETIME DEFAULT (DATETIME('now', 'localtime'))");
@@ -20,6 +42,14 @@ export const initializeDatabase = (): void => {
 
     try {
       db.exec('ALTER TABLE users ADD COLUMN username TEXT');
+    } catch (e) { /* Column probably already exists */ }
+
+    try {
+      db.exec('ALTER TABLE users ADD COLUMN auth_provider TEXT');
+    } catch (e) { /* Column probably already exists */ }
+
+    try {
+      db.exec('ALTER TABLE users ADD COLUMN photo_url TEXT');
     } catch (e) { /* Column probably already exists */ }
 
     try {
@@ -49,6 +79,24 @@ export const initializeDatabase = (): void => {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS auth_otp_challenges (
+        id TEXT PRIMARY KEY,
+        purpose TEXT NOT NULL,
+        email TEXT NOT NULL,
+        username TEXT,
+        uid TEXT,
+        otp_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
+      )
+    `);
+
+    db.exec('CREATE INDEX IF NOT EXISTS idx_auth_otp_email_purpose ON auth_otp_challenges(email, purpose)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_auth_otp_expires_at ON auth_otp_challenges(expires_at)');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS incomes (

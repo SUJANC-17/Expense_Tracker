@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
     user?: {
         uid: string;
         email?: string;
+        providerId?: string;
     };
 }
 
@@ -29,6 +30,7 @@ export const authenticateToken = async (
         req.user = {
             uid: decodedToken.uid,
             ...(decodedToken.email && { email: decodedToken.email }),
+            providerId: decodedToken.firebase?.sign_in_provider,
         };
 
         // Update last activity timestamp (SQLite synchronous run)

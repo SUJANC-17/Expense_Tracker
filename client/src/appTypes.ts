@@ -3,6 +3,11 @@ export interface User {
     username: string;
     email: string;
     createdAt: string;
+    photoURL?: string;
+    authProvider?: string | null;
+    providerIds?: string[];
+    hasPassword?: boolean;
+    hasGoogle?: boolean;
 }
 
 export interface ReminderSettings {

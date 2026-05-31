@@ -15,6 +15,11 @@ const ERROR_MAP: Record<string, string> = {
   'auth/configuration-not-found': 'Authentication is not enabled for this project. Please contact support.',
   'auth/operation-not-allowed': 'Email/password sign-in is not enabled. Please contact support.',
   'auth/user-disabled': 'This account has been disabled. Please contact support.',
+  'auth/account-exists-with-different-credential': 'This email is already registered with a different login method',
+  'auth/email-already-in-use': 'This email is already registered with a different login method',
+  'auth/credential-already-in-use': 'This email is already registered with a different login method',
+  'auth/provider-already-linked': 'This login method is already linked to your account.',
+  'auth/requires-recent-login': 'Please sign in again before changing your password.',
   'auth/unauthorized-domain': 'This site is not authorized for Firebase sign-in. Please contact support.',
   'auth/app-deleted': 'Authentication service is unavailable. Please refresh and try again.',
   'auth/invalid-user-token': 'Your session has expired. Please log in again.',
@@ -23,11 +28,21 @@ const ERROR_MAP: Record<string, string> = {
   INVALID_EMAIL: 'Please enter a valid email address.',
   OPERATION_NOT_ALLOWED: 'Password reset is not enabled for this project.',
   TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many failed attempts. Please try again later.',
+  MISMATCH_LOGIN_METHOD: 'This email is already registered with a different login method',
+  'Use Change Password for this account': 'This account already has a password. Use Change Password.',
+  'Set Password first before changing it': 'Set a password first before you can change it.',
+  'Password setup verified': 'Password setup verified.',
 };
 
 const API_ERROR_MAP: Array<[RegExp, string]> = [
   [/failed to register user/i, 'Something went wrong. Please try again.'],
   [/failed to send login notification/i, 'Something went wrong. Please try again.'],
+  [/this email is already registered with a different login method/i, 'This email is already registered with a different login method'],
+  [/please sign up first/i, 'Please sign up first.'],
+  [/invalid or expired otp/i, 'The verification code is invalid or expired. Please request a new code.'],
+  [/password changes are not available for google accounts/i, 'Password changes are not available for Google accounts.'],
+  [/use change password for this account/i, 'This account already has a password. Use Change Password.'],
+  [/set a password first before you can change it/i, 'Set a password first before you can change it.'],
   [/api error/i, 'Something went wrong. Please try again.'],
 ];
 

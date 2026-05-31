@@ -23,14 +23,14 @@ export function PrivacyPolicy({ onClose }: PrivacyPolicyProps) {
           <section>
             <h3 className="text-base font-semibold text-white mb-2">1. Data Collection</h3>
             <p>
-              We collect information that you provide directly to us when you register for an account, such as your email address and Google profile information. We also store financial data you manually enter, including incomes, expenses, categories, and friends list.
+              We collect information that you provide directly to us when you register for an account, such as your name, email address, and Google profile information when you sign in with Google. We also store financial data you manually enter, including incomes, expenses, categories, and your friends list.
             </p>
           </section>
 
           <section>
             <h3 className="text-base font-semibold text-white mb-2">2. Data Usage</h3>
             <p>
-              The data we collect is used exclusively to provide you with the personal expense tracking service. We use this data to calculate your balances, generate financial reports, and maintain your personal split-bill ledgers.
+              The data we collect is used only to provide and improve the personal expense tracking service. We use it to create your account, verify your email, send OTP and security emails, calculate your balances, generate financial reports, and maintain your personal split-bill ledgers.
             </p>
           </section>
 
@@ -44,7 +44,7 @@ export function PrivacyPolicy({ onClose }: PrivacyPolicyProps) {
           <section>
             <h3 className="text-base font-semibold text-white mb-2">4. User Rights</h3>
             <p>
-              You maintain full ownership of your data. You have the right to request a complete wipe of your account and all associated financial records at any time by contacting the administrator.
+              You maintain full ownership of your data. You can review, update, or delete your account information, and you can request a complete wipe of your account and all associated financial records at any time by contacting the administrator.
             </p>
           </section>
 

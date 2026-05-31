@@ -10,12 +10,18 @@ const resolvedPath = path.resolve(serviceAccountPath);
 
 if (fs.existsSync(resolvedPath)) {
     try {
+        const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
         admin.initializeApp({
-            credential: admin.credential.cert(resolvedPath),
+            credential: admin.credential.cert(serviceAccount),
         });
         console.log('Firebase initialized');
     } catch (error) {
-        console.error('Error initializing Firebase:', error);
+        console.error(
+            'Error initializing Firebase Admin SDK. ' +
+            'Make sure the service-account JSON is valid, the key has not been revoked, ' +
+            'and the server clock is correct.',
+            error
+        );
     }
 } else {
     console.warn(

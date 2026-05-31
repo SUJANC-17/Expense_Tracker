@@ -5,13 +5,21 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
 import { DollarSign, CheckSquare, Square, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 import { PrivacyPolicy } from './PrivacyPolicy';
 
 interface AuthFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
-  onSignup: (username: string, email: string, password: string) => Promise<void>;
-  onLoginWithGoogle: () => Promise<void>;
+  onRequestSignupOtp: (username: string, email: string) => Promise<{ challengeId: string; expiresInMinutes: number }>;
+  onVerifySignupOtp: (payload: {
+    challengeId: string;
+    otp: string;
+    username: string;
+    email: string;
+    password: string;
+  }) => Promise<void>;
+  onLoginWithGoogle: (mode: 'login' | 'signup') => Promise<void>;
 }
 
 const PRIVACY_ERROR_MESSAGE = 'You must agree to the Privacy Policy to create an account';
@@ -20,20 +28,35 @@ const inputClassName =
   'bg-white/10 border-white/20 text-white placeholder:text-gray-500 transition-all duration-200 ' +
   'focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30 hover:bg-white/15';
 
-export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps) {
+export function AuthForm({
+  onLogin,
+  onRequestSignupOtp,
+  onVerifySignupOtp,
+  onLoginWithGoogle,
+}: AuthFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>(() => window.location.hash === '#signup' ? 'signup' : 'login');
   const [loading, setLoading] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [agreedToPrivacyPolicy, setAgreedToPrivacyPolicy] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showSignupOtp, setShowSignupOtp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
+  const [signupOtp, setSignupOtp] = useState('');
+  const [pendingSignup, setPendingSignup] = useState<{
+    challengeId: string;
+    username: string;
+    email: string;
+    password: string;
+    expiresInMinutes: number;
+  } | null>(null);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -115,12 +138,17 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
     setLoading(true);
     try {
       if (mode === 'signup') {
-        await onSignup(formData.username.trim(), formData.email.trim(), formData.password);
-        window.location.hash = 'login';
-        setMode('login');
-        setFormData({ username: '', email: formData.email.trim(), password: '', confirmPassword: '' });
-        setShowForgotPassword(false);
-        setSuccess('Account created! Redirecting to login...');
+        const challenge = await onRequestSignupOtp(formData.username.trim(), formData.email.trim());
+        setPendingSignup({
+          challengeId: challenge.challengeId,
+          username: formData.username.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          expiresInMinutes: challenge.expiresInMinutes,
+        });
+        setSignupOtp('');
+        setShowSignupOtp(true);
+        setSuccess(`Verification code sent to ${formData.email.trim()}. It expires in ${challenge.expiresInMinutes} minutes.`);
       } else {
         await onLogin(formData.email.trim(), formData.password);
       }
@@ -137,7 +165,7 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
     setLoading(true);
 
     try {
-      await onLoginWithGoogle();
+      await onLoginWithGoogle(mode);
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {
@@ -146,7 +174,62 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
   };
 
   const isSignup = mode === 'signup';
-  const isSubmitDisabled = loading || (isSignup && !agreedToPrivacyPolicy);
+  const isSubmitDisabled = loading || (isSignup && !agreedToPrivacyPolicy) || showSignupOtp;
+
+  const handleVerifySignupOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!pendingSignup) {
+      setError('No pending sign-up request found');
+      return;
+    }
+
+    if (signupOtp.length !== 6) {
+      setError('Enter the 6-digit verification code');
+      return;
+    }
+
+    setOtpLoading(true);
+    try {
+      await onVerifySignupOtp({
+        challengeId: pendingSignup.challengeId,
+        otp: signupOtp,
+        username: pendingSignup.username,
+        email: pendingSignup.email,
+        password: pendingSignup.password,
+      });
+      setShowSignupOtp(false);
+      setPendingSignup(null);
+      setSignupOtp('');
+      setMode('login');
+      window.location.hash = 'login';
+      setFormData({ username: '', email: pendingSignup.email, password: '', confirmPassword: '' });
+      setSuccess('Account verified and created. Signing you in...');
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendSignupOtp = async () => {
+    if (!pendingSignup) return;
+    setError('');
+    setSuccess('');
+    setOtpLoading(true);
+    try {
+      const challenge = await onRequestSignupOtp(pendingSignup.username, pendingSignup.email);
+      setPendingSignup((prev) => prev ? { ...prev, challengeId: challenge.challengeId, expiresInMinutes: challenge.expiresInMinutes } : prev);
+      setSignupOtp('');
+      setSuccess(`A new verification code was sent to ${pendingSignup.email}.`);
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -293,9 +376,9 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {isSignup ? 'Creating account...' : 'Signing in...'}
+                  {isSignup ? 'Sending code...' : 'Signing in...'}
                 </span>
-              ) : (isSignup ? 'Sign Up' : 'Login')}
+              ) : (isSignup ? (showSignupOtp ? 'Verification sent' : 'Send Verification Code') : 'Login')}
             </Button>
           </form>
 
@@ -430,6 +513,82 @@ export function AuthForm({ onLogin, onSignup, onLoginWithGoogle }: AuthFormProps
                 <ArrowLeft className="w-4 h-4" />
                 Back to Login
               </button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showSignupOtp && pendingSignup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md shadow-2xl shadow-black/40 backdrop-blur-xl bg-slate-950/95 border-white/20">
+            <CardHeader className="space-y-3">
+              <CardTitle className="text-white">Verify your email</CardTitle>
+              <CardDescription className="text-gray-300">
+                Enter the 6-digit code sent to {pendingSignup.email}. It expires in {pendingSignup.expiresInMinutes} minutes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
+              <form onSubmit={handleVerifySignupOtp} className="space-y-4">
+                <InputOTP
+                  maxLength={6}
+                  value={signupOtp}
+                  onChange={setSignupOtp}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="\d*"
+                >
+                  <InputOTPGroup className="justify-center gap-2">
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white transition-all duration-200 disabled:opacity-60"
+                    disabled={otpLoading}
+                  >
+                    {otpLoading ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Verifying...
+                      </span>
+                    ) : 'Verify & Create Account'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResendSignupOtp}
+                    className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+                    disabled={otpLoading}
+                  >
+                    Resend code
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignupOtp(false);
+                    setPendingSignup(null);
+                    setSignupOtp('');
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to signup
+                </button>
+              </form>
             </CardContent>
           </Card>
         </div>

@@ -38,10 +38,6 @@ const Navbar: React.FC = () => {
                         <span className="nav-icon">👥</span>
                         Friends
                     </Link>
-                    <Link to="/?tab=settings" className={`nav-link ${location.search.includes('tab=settings') ? 'active' : ''}`}>
-                        <span className="nav-icon">⚙️</span>
-                        Settings
-                    </Link>
                 </div>
 
                 <button onClick={logout} className="btn btn-secondary logout-btn">
