@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
-if (!process.env.JWT_SECRET) {
-    console.warn('JWT_SECRET is not set; using fallback admin secret. Set JWT_SECRET in .env for production.');
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET must be set in the environment');
 }
 
 export interface AdminAuthRequest extends Request {

@@ -7,7 +7,11 @@ import os from 'os';
 import fs from 'fs';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET must be set in the environment');
+}
 const serverStartedAt = Date.now() - process.uptime() * 1000;
 
 function getCurrentMonthParts() {
