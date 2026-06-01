@@ -80,6 +80,24 @@ interface AdminUserSummary {
     unpaidSplits: Array<SummaryTransaction & { friendName: string }>;
 }
 
+function formatLastActive(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const period = hours >= 12 ? 'PM' : 'AM';
+
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${period}`;
+}
+
 export default function AdminDashboard() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [email, setEmail] = useState('');
@@ -475,7 +493,7 @@ export default function AdminDashboard() {
                                                         </TableCell>
                                                         <TableCell>
                                                             <Badge variant="outline" className="text-xs font-normal border-white/10 bg-white/5 text-slate-300">
-                                                                {user.last_active_at ? new Date(user.last_active_at).toLocaleString() : 'Never'}
+                                                                {user.last_active_at ? formatLastActive(user.last_active_at) : 'Never'}
                                                             </Badge>
                                                         </TableCell>
                                                         <TableCell className="text-right">
