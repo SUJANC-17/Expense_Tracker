@@ -22,6 +22,28 @@ function getCurrentMonthParts() {
     };
 }
 
+function getAllTimeBalance(uid: string): number {
+    const incomeRow = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM incomes WHERE user_id = ?'
+    ).get(uid) as any;
+    const expenseRow = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ?'
+    ).get(uid) as any;
+    const splitExpenseRow = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ?'
+    ).get(uid) as any;
+    const splitIncomeRow = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 1'
+    ).get(uid) as any;
+
+    return (
+        Number(incomeRow?.total || 0) -
+        Number(expenseRow?.total || 0) -
+        Number(splitExpenseRow?.total || 0) +
+        Number(splitIncomeRow?.total || 0)
+    );
+}
+
 function getUserCurrentMonthSummary(uid: string, includeDetails = false) {
     const { year, month } = getCurrentMonthParts();
 
@@ -41,7 +63,7 @@ function getUserCurrentMonthSummary(uid: string, includeDetails = false) {
         monthName: new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' }),
         totalIncome: Number(incomeRow?.total || 0),
         totalExpenses: Number(expenseRow?.total || 0),
-        balance: Number(incomeRow?.total || 0) - Number(expenseRow?.total || 0),
+        balance: getAllTimeBalance(uid),
         unpaidSplitsCount: Number(unpaidSplitsRow?.count || 0),
         unpaidSplitsTotal: Number(unpaidSplitsRow?.total || 0),
     };

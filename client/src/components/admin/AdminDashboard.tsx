@@ -606,7 +606,7 @@ export default function AdminDashboard() {
                                             </Card>
                                             <Card className="bg-white/5 border-white/10">
                                                 <CardContent className="p-4 space-y-1">
-                                                    <p className="text-xs text-slate-400">Current month balance</p>
+                                                    <p className="text-xs text-slate-400">Balance</p>
                                                     <p className={`text-lg font-semibold ${selectedUserSummary.data.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                                                         {formatCurrency(selectedUserSummary.data.balance)}
                                                     </p>
