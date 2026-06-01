@@ -16,24 +16,30 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
   const currentYear = new Date().getFullYear();
 
   const summary = useMemo(() => {
-    const currentIncomes = incomes.filter(i => {
-      const date = new Date(i.date);
+    const currentIncomes = incomes.filter((income) => {
+      const date = new Date(income.date);
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
 
-    const currentExpenses = expenses.filter(e => {
-      const date = new Date(e.date);
+    const currentExpenses = expenses.filter((expense) => {
+      const date = new Date(expense.date);
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
 
-    const totalIncome = currentIncomes.reduce((sum, i) => sum + i.amount, 0);
-    const totalExpenses = currentExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const unpaidSplits = splits.filter(s => {
-      const date = new Date(s.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear && !s.isPaid;
+    const currentUnpaidSplits = splits.filter((split) => {
+      const date = new Date(split.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear && !split.isPaid;
     });
-    const totalUnpaid = unpaidSplits.reduce((sum, s) => sum + s.amount, 0);
-    const balance = totalIncome - totalExpenses - totalUnpaid;
+
+    const totalIncome = currentIncomes.reduce((sum, income) => sum + income.amount, 0);
+    const totalExpenses = currentExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalUnpaid = currentUnpaidSplits.reduce((sum, split) => sum + split.amount, 0);
+
+    const allTimeIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
+    const allTimeExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const allTimeSplitOut = splits.reduce((sum, split) => sum + split.amount, 0);
+    const allTimeSplitIn = splits.filter((split) => split.isPaid).reduce((sum, split) => sum + split.amount, 0);
+    const balance = allTimeIncome - allTimeExpenses - allTimeSplitOut + allTimeSplitIn;
 
     const expensesByCategory = currentExpenses.reduce((acc, expense) => {
       const categoryName = getCategoryName(expense.categoryId);
@@ -46,7 +52,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
       totalExpenses,
       balance,
       expensesByCategory,
-      unpaidSplits,
+      unpaidSplits: currentUnpaidSplits,
       totalUnpaid,
     };
   }, [incomes, expenses, splits, currentMonth, currentYear]);
@@ -71,7 +77,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
               <CountUp end={summary.balance} prefix="₹" decimals={2} duration={2} preserveValue={true} />
             </div>
             <p className="text-xs text-gray-400 mt-1">
-              {summary.balance >= 0 ? 'Surplus' : 'Deficit'}
+              {summary.balance >= 0 ? 'Surplus, carried forward' : 'Deficit, carried forward'}
             </p>
           </CardContent>
         </Card>
@@ -157,7 +163,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
                 )}
               </div>
             ) : (
-              <p className="text-gray-400 text-center py-4">All splits are paid! 🎉</p>
+              <p className="text-gray-400 text-center py-4">All splits are paid!</p>
             )}
           </CardContent>
         </Card>

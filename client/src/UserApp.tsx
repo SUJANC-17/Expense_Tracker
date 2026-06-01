@@ -37,7 +37,6 @@ import {
     LogOut,
     Menu,
     X,
-    ChevronDown,
     BellRing,
     Clock3,
     ShieldCheck,
@@ -358,44 +357,46 @@ export default function UserApp() {
             <div className="min-h-screen">
                 <div className="container mx-auto p-4 md:p-8">
                     <div className="mb-8 rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/10">
-                        <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-6">
-                            <div className="min-w-0">
-                                <h1 className="truncate text-white mb-1">Expense Tracker</h1>
-                                <div className="flex items-center gap-2">
-                                    <p className="truncate text-gray-400">{user.username}</p>
+                        <div className="flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+                            <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-white mb-1">Expense Tracker</h1>
+                                    <div className="flex items-center gap-2">
+                                        <p className="truncate text-gray-400">{user.username}</p>
+                                    </div>
+                                </div>
+
+                                <div className="hidden flex-wrap items-center gap-2 overflow-x-auto md:flex">
+                                    {navItems.map((item) => {
+                                        const isActive = activeTab === item.value;
+                                        const Icon = item.icon;
+                                        return (
+                                            <button
+                                                key={item.value}
+                                                type="button"
+                                                onClick={() => handleTabChange(item.value)}
+                                                className={[
+                                                    'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
+                                                    isActive
+                                                        ? 'border-white/30 bg-white/20 text-white shadow-lg shadow-black/10'
+                                                        : 'border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white',
+                                                ].join(' ')}
+                                                aria-current={isActive ? 'page' : undefined}
+                                            >
+                                                <Icon className="h-4 w-4" />
+                                                {item.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
-                            <div className="hidden flex-1 items-center justify-center gap-2 overflow-x-auto md:flex">
-                                {navItems.map((item) => {
-                                    const isActive = activeTab === item.value;
-                                    const Icon = item.icon;
-                                    return (
-                                        <button
-                                            key={item.value}
-                                            type="button"
-                                            onClick={() => handleTabChange(item.value)}
-                                            className={[
-                                                'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
-                                                isActive
-                                                    ? 'border-white/30 bg-white/20 text-white shadow-lg shadow-black/10'
-                                                    : 'border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white',
-                                            ].join(' ')}
-                                            aria-current={isActive ? 'page' : undefined}
-                                        >
-                                            <Icon className="h-4 w-4" />
-                                            {item.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 self-end md:self-auto">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button
                                             type="button"
-                                            className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-2 py-1.5 text-left text-white transition hover:bg-white/15"
+                                            className="inline-flex items-center rounded-full border border-white/15 bg-white/10 p-1.5 text-left text-white transition hover:bg-white/15"
                                         >
                                             <Avatar className="h-10 w-10 border border-white/20">
                                                 <AvatarImage src={user.photoURL || undefined} alt={user.username} />
@@ -403,7 +404,6 @@ export default function UserApp() {
                                                     {getInitials(user.username, user.email)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <ChevronDown className="h-4 w-4 text-gray-300" />
                                         </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-80 border-white/15 bg-slate-950/95 text-white backdrop-blur-xl">

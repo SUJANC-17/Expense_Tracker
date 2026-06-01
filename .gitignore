@@ -1,0 +1,21 @@
+.env
+.expense_tracker.env
+client/.env
+server/.env
+server/firebase-service-account.json
+
+# Build and dependency output
+client/node_modules/
+server/node_modules/
+client/dist/
+server/dist/
+server/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Keep example env files
+!.expense_tracker.env.example
+!client/.env.example
+!server/.env.example

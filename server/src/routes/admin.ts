@@ -10,6 +10,57 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-env';
 const serverStartedAt = Date.now() - process.uptime() * 1000;
 
+function getCurrentMonthParts() {
+    const now = new Date();
+    return {
+        year: now.getFullYear().toString(),
+        month: (now.getMonth() + 1).toString().padStart(2, '0'),
+    };
+}
+
+function getUserCurrentMonthSummary(uid: string, includeDetails = false) {
+    const { year, month } = getCurrentMonthParts();
+
+    const incomeRow = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM incomes WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?"
+    ).get(uid, year, month) as any;
+    const expenseRow = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?"
+    ).get(uid, year, month) as any;
+    const unpaidSplitsRow = db.prepare(
+        "SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 0 AND strftime('%Y', date) = ? AND strftime('%m', date) = ?"
+    ).get(uid, year, month) as any;
+
+    const summary: any = {
+        year: Number(year),
+        month: Number(month),
+        monthName: new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' }),
+        totalIncome: Number(incomeRow?.total || 0),
+        totalExpenses: Number(expenseRow?.total || 0),
+        balance: Number(incomeRow?.total || 0) - Number(expenseRow?.total || 0),
+        unpaidSplitsCount: Number(unpaidSplitsRow?.count || 0),
+        unpaidSplitsTotal: Number(unpaidSplitsRow?.total || 0),
+    };
+
+    if (includeDetails) {
+        summary.incomes = db.prepare(
+            "SELECT id, amount, source, description, date FROM incomes WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date DESC"
+        ).all(uid, year, month);
+        summary.expenses = db.prepare(
+            `SELECT e.id, e.amount, c.name as category, e.description, e.date
+             FROM expenses e
+             LEFT JOIN categories c ON e.category_id = c.id
+             WHERE e.user_id = ? AND strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?
+             ORDER BY e.date DESC`
+        ).all(uid, year, month);
+        summary.unpaidSplits = db.prepare(
+            "SELECT id, friend_name as friendName, amount, description, date FROM splits WHERE user_id = ? AND is_paid = 0 AND strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date DESC"
+        ).all(uid, year, month);
+    }
+
+    return summary;
+}
+
 // Admin Login (Email + PIN)
 router.post('/login', (req, res) => {
     const { email, pin } = req.body;
@@ -39,10 +90,23 @@ router.use(authenticateAdmin);
 // List all users
 router.get('/users', (req, res) => {
     try {
-        const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
-        res.json(users);
+        const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all() as Array<{ id: string }>;
+        res.json(users.map((user) => ({
+            ...user,
+            ...getUserCurrentMonthSummary(user.id),
+        })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+
+// Current month summary for a specific user
+router.get('/users/:uid/summary/current', (req, res) => {
+    try {
+        res.json(getUserCurrentMonthSummary(req.params.uid, true));
+    } catch (error) {
+        console.error('Error fetching user summary:', error);
+        res.status(500).json({ error: 'Failed to fetch user summary' });
     }
 });
 

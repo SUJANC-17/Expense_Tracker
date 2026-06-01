@@ -4,13 +4,24 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { 
-    Trash2, Database, Lock, LogOut, Users, Activity, 
-    HardDrive, Download, Tag, Plus, Edit2, Check, X, ShieldAlert 
+import {
+    Trash2,
+    Database,
+    LogOut,
+    Users,
+    Activity,
+    HardDrive,
+    Download,
+    Tag,
+    Plus,
+    Edit2,
+    Check,
+    X,
+    ShieldAlert,
+    FileText,
 } from 'lucide-react';
 import { adminApi } from '../../utils/adminApi';
 
-// Type definitions
 interface SystemHealth {
     status: string;
     startedAt: string;
@@ -34,26 +45,59 @@ interface Category {
     name: string;
 }
 
+interface AdminUserRow {
+    id: string;
+    email: string;
+    username?: string | null;
+    created_at?: string;
+    last_active_at?: string;
+    monthName?: string;
+    totalIncome?: number;
+    totalExpenses?: number;
+    balance?: number;
+    unpaidSplitsCount?: number;
+    unpaidSplitsTotal?: number;
+}
+
+interface SummaryTransaction {
+    id: number;
+    amount: number;
+    description?: string | null;
+    date: string;
+}
+
+interface AdminUserSummary {
+    year: number;
+    month: number;
+    monthName: string;
+    totalIncome: number;
+    totalExpenses: number;
+    balance: number;
+    unpaidSplitsCount: number;
+    unpaidSplitsTotal: number;
+    incomes: Array<SummaryTransaction & { source: string }>;
+    expenses: Array<SummaryTransaction & { category?: string | null }>;
+    unpaidSplits: Array<SummaryTransaction & { friendName: string }>;
+}
+
 export default function AdminDashboard() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [email, setEmail] = useState('');
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
-    
-    // Global Data States
+
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'categories'>('overview');
     const [loading, setLoading] = useState(false);
-    
-    // Users Data
-    const [users, setUsers] = useState<any[]>([]);
-    const [selectedUserTables, setSelectedUserTables] = useState<{ uid: string, tables: string[] } | null>(null);
-    const [selectedTableData, setSelectedTableData] = useState<{ tableName: string, rows: any[] } | null>(null);
-    
-    // System Data
+
+    const [users, setUsers] = useState<AdminUserRow[]>([]);
+    const [selectedUserSummary, setSelectedUserSummary] = useState<{ uid: string; email: string; data: AdminUserSummary } | null>(null);
+    const [selectedUserTables, setSelectedUserTables] = useState<{ uid: string; tables: string[] } | null>(null);
+    const [selectedTableData, setSelectedTableData] = useState<{ tableName: string; rows: any[] } | null>(null);
+    const [userSummaryLoading, setUserSummaryLoading] = useState(false);
+
     const [health, setHealth] = useState<SystemHealth | null>(null);
     const [analytics, setAnalytics] = useState<Analytics | null>(null);
-    
-    // Categories Data
+
     const [categories, setCategories] = useState<Category[]>([]);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [editingCategory, setEditingCategory] = useState<number | null>(null);
@@ -93,7 +137,6 @@ export default function AdminDashboard() {
         setIsLoggedIn(false);
     };
 
-    // --- API Fetchers ---
     const fetchUsers = async () => {
         setLoading(true);
         try {
@@ -106,23 +149,50 @@ export default function AdminDashboard() {
     };
 
     const fetchHealth = async () => {
-        try { setHealth(await adminApi.get('/admin/system/health')); } catch (err) { console.error(err); }
+        try {
+            setHealth(await adminApi.get('/admin/system/health'));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const fetchAnalytics = async () => {
-        try { setAnalytics(await adminApi.get('/admin/system/analytics')); } catch (err) { console.error(err); }
+        try {
+            setAnalytics(await adminApi.get('/admin/system/analytics'));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const fetchCategories = async () => {
-        try { setCategories(await adminApi.get('/admin/categories')); } catch (err) { console.error(err); }
+        try {
+            setCategories(await adminApi.get('/admin/categories'));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    // --- Actions ---
+    const openUserSummary = async (uid: string, email: string) => {
+        setUserSummaryLoading(true);
+        try {
+            const data = await adminApi.get(`/admin/users/${uid}/summary/current`) as AdminUserSummary;
+            setSelectedUserSummary({ uid, email, data });
+            setSelectedUserTables(null);
+            setSelectedTableData(null);
+        } catch (err) {
+            alert('Failed to fetch user summary');
+        } finally {
+            setUserSummaryLoading(false);
+        }
+    };
+
     const inspectTables = async (uid: string) => {
         try {
             setSelectedUserTables({ uid, tables: await adminApi.get(`/admin/users/${uid}/tables`) });
             setSelectedTableData(null);
-        } catch (err) { alert('Failed to fetch tables'); }
+        } catch (err) {
+            alert('Failed to fetch tables');
+        }
     };
 
     const inspectTableData = async (uid: string, tableName: string) => {
@@ -130,7 +200,9 @@ export default function AdminDashboard() {
             const res = await adminApi.get(`/admin/users/${uid}/tables/${tableName}/data`);
             const fetchedRows = Array.isArray(res) ? res : (res.data || []);
             setSelectedTableData({ tableName, rows: fetchedRows });
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const deleteUser = async (uid: string, userEmail: string) => {
@@ -138,13 +210,18 @@ export default function AdminDashboard() {
         try {
             await adminApi.delete(`/admin/users/${uid}`);
             alert('User deleted.');
+            if (selectedUserSummary?.uid === uid) {
+                setSelectedUserSummary(null);
+            }
             setSelectedUserTables(null);
             setSelectedTableData(null);
             await fetchUsers();
             if (activeTab === 'overview') {
                 await fetchAnalytics();
             }
-        } catch (err: any) { alert(err.message || 'Failed to delete user'); }
+        } catch (err: any) {
+            alert(err.message || 'Failed to delete user');
+        }
     };
 
     const handleAddCategory = async () => {
@@ -153,7 +230,9 @@ export default function AdminDashboard() {
             await adminApi.post('/admin/categories', { name: newCategoryName });
             setNewCategoryName('');
             fetchCategories();
-        } catch (err) { alert('Failed to add category'); }
+        } catch (err) {
+            alert('Failed to add category');
+        }
     };
 
     const handleUpdateCategory = async (id: number) => {
@@ -162,7 +241,9 @@ export default function AdminDashboard() {
             await adminApi.put(`/admin/categories/${id}`, { name: editCategoryName });
             setEditingCategory(null);
             fetchCategories();
-        } catch (err) { alert('Failed to update category'); }
+        } catch (err) {
+            alert('Failed to update category');
+        }
     };
 
     const handleDeleteCategory = async (id: number) => {
@@ -170,7 +251,9 @@ export default function AdminDashboard() {
         try {
             await adminApi.delete(`/admin/categories/${id}`);
             fetchCategories();
-        } catch (err) { alert('Failed to delete category'); }
+        } catch (err) {
+            alert('Failed to delete category');
+        }
     };
 
     const handleBackup = async () => {
@@ -184,7 +267,8 @@ export default function AdminDashboard() {
         }
     };
 
-    // --- Renderers ---
+    const formatCurrency = (value: number) => `₹${value.toFixed(2)}`;
+
     if (!isLoggedIn) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#09090b] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#09090b] to-[#09090b] p-4">
@@ -218,7 +302,9 @@ export default function AdminDashboard() {
 
     const formatBytes = (bytes: number) => {
         if (bytes === 0) return '0 B';
-        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
@@ -230,7 +316,6 @@ export default function AdminDashboard() {
 
     return (
         <div className="min-h-screen bg-[#09090b] text-slate-200 flex flex-col md:flex-row">
-            {/* Sidebar */}
             <aside className="w-full md:w-64 border-b md:border-r border-white/10 bg-white/[0.02] flex flex-col">
                 <div className="p-6 border-b border-white/10">
                     <div className="flex items-center gap-3">
@@ -261,11 +346,8 @@ export default function AdminDashboard() {
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
                 <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    
-                    {/* TAB: OVERVIEW */}
                     {activeTab === 'overview' && (
                         <div className="space-y-6">
                             <div>
@@ -338,12 +420,11 @@ export default function AdminDashboard() {
                         </div>
                     )}
 
-                    {/* TAB: USERS */}
                     {activeTab === 'users' && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-white tracking-tight">User Management</h2>
-                                <p className="text-slate-400 mt-1">Inspect user data and perform account wipes.</p>
+                                <p className="text-slate-400 mt-1">Inspect current month finances and perform account wipes.</p>
                             </div>
 
                             <Card className="bg-white/5 border-white/10 backdrop-blur-xl">
@@ -353,39 +434,246 @@ export default function AdminDashboard() {
                                             <TableRow className="border-white/10 bg-white/[0.02] hover:bg-white/[0.02]">
                                                 <TableHead className="text-slate-400 font-medium">User Email</TableHead>
                                                 <TableHead className="text-slate-400 font-medium">Firebase UID</TableHead>
+                                                <TableHead className="text-slate-400 font-medium text-right">Income</TableHead>
+                                                <TableHead className="text-slate-400 font-medium text-right">Expenses</TableHead>
+                                                <TableHead className="text-slate-400 font-medium text-right">Balance</TableHead>
+                                                <TableHead className="text-slate-400 font-medium text-right">Unpaid Splits</TableHead>
                                                 <TableHead className="text-slate-400 font-medium">Last Active</TableHead>
                                                 <TableHead className="text-slate-400 font-medium text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {users.length === 0 && !loading && (
-                                                <TableRow><TableCell colSpan={4} className="text-center text-slate-500 py-8">No users found.</TableCell></TableRow>
-                                            )}
-                                            {users.map((user) => (
-                                                <TableRow key={user.id} className="border-white/5 hover:bg-white/[0.04] transition-colors">
-                                                    <TableCell className="font-medium text-slate-200">{user.email}</TableCell>
-                                                    <TableCell className="text-slate-500 text-xs font-mono">{user.id}</TableCell>
-                                                    <TableCell>
-                                                        <Badge variant="outline" className="text-xs font-normal border-white/10 bg-white/5 text-slate-300">
-                                                            {user.last_active_at ? new Date(user.last_active_at).toLocaleString() : 'Never'}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-2">
-                                                            <Button variant="ghost" size="sm" onClick={() => inspectTables(user.id)} className="h-8 w-8 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
-                                                                <Database className="w-4 h-4" />
-                                                            </Button>
-                                                            <Button variant="ghost" size="sm" onClick={() => deleteUser(user.id, user.email)} className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
+                                                <TableRow>
+                                                    <TableCell colSpan={8} className="text-center text-slate-500 py-8">No users found.</TableCell>
                                                 </TableRow>
-                                            ))}
+                                            )}
+                                            {users.map((user) => {
+                                                const isSelected = selectedUserSummary?.uid === user.id;
+                                                return (
+                                                    <TableRow
+                                                        key={user.id}
+                                                        className={`border-white/5 transition-colors cursor-pointer ${isSelected ? 'bg-blue-500/10 hover:bg-blue-500/15' : 'hover:bg-white/[0.04]'}`}
+                                                        onClick={() => openUserSummary(user.id, user.email)}
+                                                    >
+                                                        <TableCell className="font-medium text-slate-200">{user.email}</TableCell>
+                                                        <TableCell className="text-slate-500 text-xs font-mono">{user.id}</TableCell>
+                                                        <TableCell className="text-right text-emerald-300">
+                                                            {formatCurrency(user.totalIncome || 0)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-rose-300">
+                                                            {formatCurrency(user.totalExpenses || 0)}
+                                                        </TableCell>
+                                                        <TableCell className={`text-right font-semibold ${(user.balance || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                                            {formatCurrency(user.balance || 0)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-orange-300 font-medium">{user.unpaidSplitsCount || 0}</span>
+                                                                <span className="text-xs text-slate-500">{formatCurrency(user.unpaidSplitsTotal || 0)}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge variant="outline" className="text-xs font-normal border-white/10 bg-white/5 text-slate-300">
+                                                                {user.last_active_at ? new Date(user.last_active_at).toLocaleString() : 'Never'}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex justify-end gap-2">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        void openUserSummary(user.id, user.email);
+                                                                    }}
+                                                                    className="h-8 w-8 p-0 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                                                                    title="View summary"
+                                                                >
+                                                                    <FileText className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        void inspectTables(user.id);
+                                                                    }}
+                                                                    className="h-8 w-8 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                                                    title="Inspect raw tables"
+                                                                >
+                                                                    <Database className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        void deleteUser(user.id, user.email);
+                                                                    }}
+                                                                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                                                    title="Delete user"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
                                         </TableBody>
                                     </Table>
                                 </CardContent>
                             </Card>
+
+                            {userSummaryLoading && (
+                                <Card className="bg-white/5 border-white/10 backdrop-blur-xl">
+                                    <CardContent className="p-6 text-slate-400">
+                                        Loading user summary...
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {selectedUserSummary && !userSummaryLoading && (
+                                <Card className="bg-blue-950/20 border-blue-500/20 animate-in fade-in slide-in-from-bottom-4">
+                                    <CardHeader className="border-b border-blue-500/10 bg-blue-500/5 flex flex-row items-start justify-between gap-4">
+                                        <div>
+                                            <CardTitle className="text-blue-300 flex items-center gap-2 text-base">
+                                                <FileText className="w-4 h-4" />
+                                                {selectedUserSummary.email}
+                                            </CardTitle>
+                                            <CardDescription className="text-slate-400">
+                                                {selectedUserSummary.uid} - {selectedUserSummary.data.monthName} {selectedUserSummary.data.year}
+                                            </CardDescription>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => inspectTables(selectedUserSummary.uid)}
+                                                className="h-8 text-blue-300 hover:text-blue-200 hover:bg-blue-500/20"
+                                            >
+                                                <Database className="w-4 h-4 mr-2" />
+                                                Raw tables
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setSelectedUserSummary(null)}
+                                                className="h-8 text-blue-300 hover:text-blue-200 hover:bg-blue-500/20"
+                                            >
+                                                Close
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-6 space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardContent className="p-4 space-y-1">
+                                                    <p className="text-xs text-slate-400">Current month income</p>
+                                                    <p className="text-lg font-semibold text-emerald-300">{formatCurrency(selectedUserSummary.data.totalIncome)}</p>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardContent className="p-4 space-y-1">
+                                                    <p className="text-xs text-slate-400">Current month expenses</p>
+                                                    <p className="text-lg font-semibold text-rose-300">{formatCurrency(selectedUserSummary.data.totalExpenses)}</p>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardContent className="p-4 space-y-1">
+                                                    <p className="text-xs text-slate-400">Current month balance</p>
+                                                    <p className={`text-lg font-semibold ${selectedUserSummary.data.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                                        {formatCurrency(selectedUserSummary.data.balance)}
+                                                    </p>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardContent className="p-4 space-y-1">
+                                                    <p className="text-xs text-slate-400">Unpaid splits</p>
+                                                    <p className="text-lg font-semibold text-orange-300">
+                                                        {selectedUserSummary.data.unpaidSplitsCount} / {formatCurrency(selectedUserSummary.data.unpaidSplitsTotal)}
+                                                    </p>
+                                                </CardContent>
+                                            </Card>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardHeader className="pb-3">
+                                                    <CardTitle className="text-sm text-slate-300">Income entries</CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                    {selectedUserSummary.data.incomes.length > 0 ? (
+                                                        selectedUserSummary.data.incomes.map((income) => (
+                                                            <div key={income.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div>
+                                                                        <p className="text-sm text-white">{income.source}</p>
+                                                                        {income.description && <p className="text-xs text-slate-400">{income.description}</p>}
+                                                                        <p className="text-xs text-slate-500 mt-1">{new Date(income.date).toLocaleDateString()}</p>
+                                                                    </div>
+                                                                    <p className="text-emerald-300 font-medium">{formatCurrency(income.amount)}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p className="text-sm text-slate-500">No income entries this month.</p>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardHeader className="pb-3">
+                                                    <CardTitle className="text-sm text-slate-300">Expense entries</CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                    {selectedUserSummary.data.expenses.length > 0 ? (
+                                                        selectedUserSummary.data.expenses.map((expense) => (
+                                                            <div key={expense.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div>
+                                                                        <p className="text-sm text-white">{expense.category || 'Uncategorized'}</p>
+                                                                        {expense.description && <p className="text-xs text-slate-400">{expense.description}</p>}
+                                                                        <p className="text-xs text-slate-500 mt-1">{new Date(expense.date).toLocaleDateString()}</p>
+                                                                    </div>
+                                                                    <p className="text-rose-300 font-medium">{formatCurrency(expense.amount)}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p className="text-sm text-slate-500">No expense entries this month.</p>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card className="bg-white/5 border-white/10">
+                                                <CardHeader className="pb-3">
+                                                    <CardTitle className="text-sm text-slate-300">Unpaid splits</CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                    {selectedUserSummary.data.unpaidSplits.length > 0 ? (
+                                                        selectedUserSummary.data.unpaidSplits.map((split) => (
+                                                            <div key={split.id} className="rounded-lg border border-orange-500/20 bg-orange-500/10 p-3">
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div>
+                                                                        <p className="text-sm text-white">{split.friendName}</p>
+                                                                        {split.description && <p className="text-xs text-slate-300">{split.description}</p>}
+                                                                        <p className="text-xs text-slate-500 mt-1">{new Date(split.date).toLocaleDateString()}</p>
+                                                                    </div>
+                                                                    <p className="text-orange-300 font-medium">{formatCurrency(split.amount)}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p className="text-sm text-slate-500">No unpaid splits this month.</p>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             {selectedUserTables && (
                                 <Card className="bg-blue-950/20 border-blue-500/20 animate-in fade-in slide-in-from-bottom-4">
@@ -393,12 +681,23 @@ export default function AdminDashboard() {
                                         <CardTitle className="text-blue-400 flex items-center gap-2 text-base">
                                             <Database className="w-4 h-4" /> Inspecting: {selectedUserTables.uid}
                                         </CardTitle>
-                                        <Button variant="ghost" size="sm" onClick={() => { setSelectedUserTables(null); setSelectedTableData(null); }} className="h-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20">Close</Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => { setSelectedUserTables(null); setSelectedTableData(null); }}
+                                            className="h-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20"
+                                        >
+                                            Close
+                                        </Button>
                                     </CardHeader>
                                     <CardContent className="p-6">
                                         <div className="flex flex-wrap gap-3 mb-6">
-                                            {selectedUserTables.tables.map(table => (
-                                                <button key={table} onClick={() => inspectTableData(selectedUserTables.uid, table)} className={`px-4 py-2 rounded-md border text-sm font-mono transition-all ${selectedTableData?.tableName === table ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}>
+                                            {selectedUserTables.tables.map((table) => (
+                                                <button
+                                                    key={table}
+                                                    onClick={() => inspectTableData(selectedUserTables.uid, table)}
+                                                    className={`px-4 py-2 rounded-md border text-sm font-mono transition-all ${selectedTableData?.tableName === table ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                                                >
                                                     {table}
                                                 </button>
                                             ))}
@@ -410,7 +709,7 @@ export default function AdminDashboard() {
                                                     <Table>
                                                         <TableHeader className="bg-white/5">
                                                             <TableRow className="border-white/10">
-                                                                {selectedTableData.rows.length > 0 ? Object.keys(selectedTableData.rows[0]).map(key => (
+                                                                {selectedTableData.rows.length > 0 ? Object.keys(selectedTableData.rows[0]).map((key) => (
                                                                     <TableHead key={key} className="text-blue-300 whitespace-nowrap py-2">{key}</TableHead>
                                                                 )) : <TableHead className="text-slate-400 py-2">Data</TableHead>}
                                                             </TableRow>
@@ -426,7 +725,9 @@ export default function AdminDashboard() {
                                                                 </TableRow>
                                                             ))}
                                                             {selectedTableData.rows.length === 0 && (
-                                                                <TableRow><TableCell className="text-center text-slate-500 py-6">Table is empty</TableCell></TableRow>
+                                                                <TableRow>
+                                                                    <TableCell className="text-center text-slate-500 py-6">Table is empty</TableCell>
+                                                                </TableRow>
                                                             )}
                                                         </TableBody>
                                                     </Table>
@@ -439,7 +740,6 @@ export default function AdminDashboard() {
                         </div>
                     )}
 
-                    {/* TAB: CATEGORIES */}
                     {activeTab === 'categories' && (
                         <div className="space-y-6">
                             <div>
@@ -507,7 +807,6 @@ export default function AdminDashboard() {
                             </Card>
                         </div>
                     )}
-
                 </div>
             </main>
         </div>

@@ -31,25 +31,25 @@ export function Reports({ incomes, expenses, splits }: ReportsProps) {
     const year = parseInt(selectedYear);
     const month = parseInt(selectedMonth) - 1;
 
-    const filteredIncomes = incomes.filter(i => {
-      const date = new Date(i.date);
+    const filteredIncomes = incomes.filter((income) => {
+      const date = new Date(income.date);
       return date.getFullYear() === year && date.getMonth() === month;
     });
 
-    const filteredExpenses = expenses.filter(e => {
-      const date = new Date(e.date);
+    const filteredExpenses = expenses.filter((expense) => {
+      const date = new Date(expense.date);
       return date.getFullYear() === year && date.getMonth() === month;
     });
 
-    const filteredSplits = splits.filter(s => {
-      const date = new Date(s.date);
-      return date.getFullYear() === year && date.getMonth() === month && !s.isPaid;
+    const filteredSplits = splits.filter((split) => {
+      const date = new Date(split.date);
+      return date.getFullYear() === year && date.getMonth() === month && !split.isPaid;
     });
 
-    const totalIncome = filteredIncomes.reduce((sum, i) => sum + i.amount, 0);
-    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalUnpaidSplits = filteredSplits.reduce((sum, s) => sum + s.amount, 0);
-    const balance = totalIncome - totalExpenses - totalUnpaidSplits;
+    const totalIncome = filteredIncomes.reduce((sum, income) => sum + income.amount, 0);
+    const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalUnpaidSplits = filteredSplits.reduce((sum, split) => sum + split.amount, 0);
+    const balance = totalIncome - totalExpenses;
 
     const expensesByCategory = filteredExpenses.reduce((acc, expense) => {
       const categoryName = getCategoryName(expense.categoryId);
