@@ -357,29 +357,28 @@ export default function UserApp() {
                 <div className="container mx-auto p-4 md:p-8">
                     <div className="mb-8 rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/10">
                         <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
-                            <div className="grid grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 md:hidden">
+                            <div className="flex items-center gap-3 md:hidden">
                                 <button
                                     type="button"
                                     onClick={() => setMobileMenuOpen((open) => !open)}
-                                    className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15"
+                                    className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15"
                                     aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                                     aria-expanded={mobileMenuOpen}
                                 >
                                     {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                                 </button>
 
-                                <div className="min-w-0 text-center">
+                                <div className="min-w-0 flex-1 text-center">
                                     <h1 className="truncate text-white">Expense Tracker</h1>
-                                    <p className="truncate text-xs text-gray-400">{user.username}</p>
                                 </div>
 
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button
                                             type="button"
-                                            className="inline-flex items-center rounded-full border border-white/15 bg-white/10 p-1.5 text-left text-white transition hover:bg-white/15"
+                                            className="inline-flex shrink-0 items-center rounded-full border border-white/15 bg-white/10 p-1 text-left text-white transition hover:bg-white/15"
                                         >
-                                            <Avatar className="h-10 w-10 border border-white/20">
+                                            <Avatar className="h-9 w-9 border border-white/20">
                                                 <AvatarImage src={user.photoURL || undefined} alt={user.username} />
                                                 <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
                                                     {getInitials(user.username, user.email)}
