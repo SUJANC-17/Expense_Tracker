@@ -126,7 +126,6 @@ export default function UserApp() {
         addExpense,
         updateExpense,
         deleteExpense,
-        addSplit,
         addSplitBulk,
         updateSplit,
         deleteSplit,
@@ -357,41 +356,23 @@ export default function UserApp() {
             <div className="min-h-screen">
                 <div className="container mx-auto p-4 md:p-8">
                     <div className="mb-8 rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl shadow-2xl shadow-black/10">
-                        <div className="flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-                            <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
-                                <div className="min-w-0">
-                                    <h1 className="truncate text-white mb-1">Expense Tracker</h1>
-                                    <div className="flex items-center gap-2">
-                                        <p className="truncate text-gray-400">{user.username}</p>
-                                    </div>
+                        <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
+                            <div className="grid grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 md:hidden">
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileMenuOpen((open) => !open)}
+                                    className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15"
+                                    aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                                    aria-expanded={mobileMenuOpen}
+                                >
+                                    {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                                </button>
+
+                                <div className="min-w-0 text-center">
+                                    <h1 className="truncate text-white">Expense Tracker</h1>
+                                    <p className="truncate text-xs text-gray-400">{user.username}</p>
                                 </div>
 
-                                <div className="hidden flex-wrap items-center gap-2 overflow-x-auto md:flex">
-                                    {navItems.map((item) => {
-                                        const isActive = activeTab === item.value;
-                                        const Icon = item.icon;
-                                        return (
-                                            <button
-                                                key={item.value}
-                                                type="button"
-                                                onClick={() => handleTabChange(item.value)}
-                                                className={[
-                                                    'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
-                                                    isActive
-                                                        ? 'border-white/30 bg-white/20 text-white shadow-lg shadow-black/10'
-                                                        : 'border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white',
-                                                ].join(' ')}
-                                                aria-current={isActive ? 'page' : undefined}
-                                            >
-                                                <Icon className="h-4 w-4" />
-                                                {item.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 self-end md:self-auto">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button
@@ -510,16 +491,162 @@ export default function UserApp() {
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+                            </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setMobileMenuOpen((open) => !open)}
-                                    className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15 md:hidden"
-                                    aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-                                    aria-expanded={mobileMenuOpen}
-                                >
-                                    {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                                </button>
+                            <div className="hidden md:flex md:items-center md:justify-between md:gap-4">
+                                <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
+                                    <div className="min-w-0">
+                                        <h1 className="truncate text-white mb-1">Expense Tracker</h1>
+                                        <div className="flex items-center gap-2">
+                                            <p className="truncate text-gray-400">{user.username}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden flex-wrap items-center gap-2 overflow-x-auto md:flex">
+                                        {navItems.map((item) => {
+                                            const isActive = activeTab === item.value;
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.value}
+                                                    type="button"
+                                                    onClick={() => handleTabChange(item.value)}
+                                                    className={[
+                                                        'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all whitespace-nowrap',
+                                                        isActive
+                                                            ? 'border-white/30 bg-white/20 text-white shadow-lg shadow-black/10'
+                                                            : 'border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white',
+                                                    ].join(' ')}
+                                                    aria-current={isActive ? 'page' : undefined}
+                                                >
+                                                    <Icon className="h-4 w-4" />
+                                                    {item.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="hidden items-center gap-3 md:flex">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center rounded-full border border-white/15 bg-white/10 p-1.5 text-left text-white transition hover:bg-white/15"
+                                            >
+                                                <Avatar className="h-10 w-10 border border-white/20">
+                                                    <AvatarImage src={user.photoURL || undefined} alt={user.username} />
+                                                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                                                        {getInitials(user.username, user.email)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-80 border-white/15 bg-slate-950/95 text-white backdrop-blur-xl">
+                                            <DropdownMenuLabel className="space-y-1 px-3 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-10 w-10 border border-white/20">
+                                                        <AvatarImage src={user.photoURL || undefined} alt={user.username} />
+                                                        <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                                                            {getInitials(user.username, user.email)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-semibold text-white">{user.username}</p>
+                                                        <p className="truncate text-xs text-gray-400">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator className="bg-white/10" />
+                                            {hasProvider(user, 'password') ? (
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                    onSelect={(event) => {
+                                                        event.preventDefault();
+                                                        openPasswordDialog('change');
+                                                    }}
+                                                >
+                                                    <KeyRound className="h-4 w-4 text-purple-300" />
+                                                    Change Password
+                                                </DropdownMenuItem>
+                                            ) : (
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                    onSelect={(event) => {
+                                                        event.preventDefault();
+                                                        openPasswordDialog('set');
+                                                    }}
+                                                >
+                                                    <KeyRound className="h-4 w-4 text-purple-300" />
+                                                    Set Password
+                                                </DropdownMenuItem>
+                                            )}
+                                            {!hasProvider(user, 'google.com') && (
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                    onSelect={(event) => {
+                                                        event.preventDefault();
+                                                        void handleLinkGoogle();
+                                                    }}
+                                                >
+                                                    <Link2 className="h-4 w-4 text-sky-300" />
+                                                    {googleLinking ? 'Linking Google...' : 'Link Google'}
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    setShowReminderDialog(true);
+                                                }}
+                                            >
+                                                <BellRing className="h-4 w-4 text-emerald-300" />
+                                                Reminder Time
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    setShowDonationDialog(true);
+                                                }}
+                                            >
+                                                <Heart className="h-4 w-4 text-rose-300" />
+                                                Support Us
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    setShowPrivacyPolicy(true);
+                                                }}
+                                            >
+                                                <ShieldCheck className="h-4 w-4 text-sky-300" />
+                                                Privacy Policy
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-red-300 focus:bg-red-500/10 focus:text-red-200"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    setShowDeleteDialog(true);
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                                Delete Account
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator className="bg-white/10" />
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+                                                    logout();
+                                                }}
+                                            >
+                                                <LogOut className="h-4 w-4 text-gray-300" />
+                                                Logout
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </div>
                         </div>
 
@@ -581,8 +708,6 @@ export default function UserApp() {
                             <TabsContent value="splits" className="mt-0">
                                 <SplitManager
                                     splits={splits}
-                                    userId={user.id}
-                                    onAdd={addSplit}
                                     onAddBulk={addSplitBulk}
                                     onUpdate={updateSplit}
                                     onDelete={deleteSplit}

@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Badge } from './ui/badge';
-import { Plus, Pencil, Trash2, Check, Users, User, Split as SplitIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, Users, User, Split as SplitIcon, ChevronDown, ChevronUp, ReceiptText } from 'lucide-react';
 import CountUp from 'react-countup';
 import { motion } from 'framer-motion';
 
@@ -26,8 +26,6 @@ const itemVariants = {
 
 interface SplitManagerProps {
   splits: Split[];
-  userId: string;
-  onAdd: (split: Omit<Split, 'id'>) => void;
   onAddBulk: (bulkData: any) => void;
   onUpdate: (id: number, split: Partial<Split>) => void;
   onDelete: (id: number) => void;
@@ -35,9 +33,10 @@ interface SplitManagerProps {
   friends: Friend[];
 }
 
-export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDelete, onMarkPaid, friends }: SplitManagerProps) {
+export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid, friends }: SplitManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingSplit, setEditingSplit] = useState<Split | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   
   const [splitMode, setSplitMode] = useState<'equal' | 'manual'>('equal');
   const [manualShares, setManualShares] = useState<Record<string, string>>({});
@@ -121,6 +120,52 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
       };
     }
   }, [formData.amount, formData.selectedFriendIds, formData.includeMyself, formData.customFriendName, splitMode, manualShares]);
+
+  const groupedBills = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      title: string;
+      date: string;
+      totalAmount: number;
+      outstandingAmount: number;
+      paidAmount: number;
+      items: Split[];
+    }>();
+
+    splits.forEach((split) => {
+      const title = split.description?.trim() || 'Unlabelled Split';
+      const key = `${title.toLowerCase()}|${split.date}`;
+      const existing = groups.get(key) || {
+        key,
+        title,
+        date: split.date,
+        totalAmount: 0,
+        outstandingAmount: 0,
+        paidAmount: 0,
+        items: [],
+      };
+
+      existing.totalAmount += split.amount;
+      if (split.isPaid) {
+        existing.paidAmount += split.amount;
+      } else {
+        existing.outstandingAmount += split.amount;
+      }
+      existing.items.push(split);
+      groups.set(key, existing);
+    });
+
+    return [...groups.values()].sort((a, b) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return b.totalAmount - a.totalAmount;
+    });
+  }, [splits]);
+
+  const totalOutstanding = useMemo(
+    () => groupedBills.reduce((sum, bill) => sum + bill.outstandingAmount, 0),
+    [groupedBills],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,8 +253,6 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
     if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
-
-  const unpaidTotal = splits.filter(s => !s.isPaid).reduce((sum, s) => sum + s.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -432,6 +475,110 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
         <div className="md:col-span-2 space-y-4">
           <Card className="backdrop-blur-xl bg-white/10 border-white/20">
             <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <ReceiptText className="w-5 h-5 text-orange-400" />
+                Bill Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {groupedBills.length > 0 ? (
+                groupedBills.map((bill) => {
+                  const isExpanded = expandedGroupKey === bill.key;
+                  const isRent = bill.title.toLowerCase().includes('rent');
+                  return (
+                    <div key={bill.key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroupKey((current) => current === bill.key ? null : bill.key)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-white font-semibold">{bill.title}</p>
+                            {isRent && (
+                              <Badge className="border-orange-500/30 bg-orange-500/15 text-orange-300">
+                                Rent
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            {new Date(bill.date).toLocaleDateString()} • {bill.items.length} people
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <p className="text-sm text-orange-300 font-semibold">
+                            ₹{bill.totalAmount.toFixed(2)} total
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            ₹{bill.outstandingAmount.toFixed(2)} to collect
+                          </p>
+                        </div>
+
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-white/10 px-4 py-4 space-y-3">
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="rounded-lg bg-white/5 p-3">
+                              <p className="text-gray-400">Total</p>
+                              <p className="text-white font-semibold">₹{bill.totalAmount.toFixed(2)}</p>
+                            </div>
+                            <div className="rounded-lg bg-orange-500/10 p-3">
+                              <p className="text-gray-400">Pending</p>
+                              <p className="text-orange-300 font-semibold">₹{bill.outstandingAmount.toFixed(2)}</p>
+                            </div>
+                            <div className="rounded-lg bg-green-500/10 p-3">
+                              <p className="text-gray-400">Paid</p>
+                              <p className="text-green-300 font-semibold">₹{bill.paidAmount.toFixed(2)}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {bill.items.map((split) => (
+                              <div
+                                key={split.id}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm text-white">{split.friendName}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {split.isPaid ? 'Paid' : 'To collect'} • {new Date(split.date).toLocaleDateString()}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className={split.isPaid ? 'text-green-300 font-semibold' : 'text-orange-300 font-semibold'}>
+                                    ₹{split.amount.toFixed(2)}
+                                  </span>
+                                  {!split.isPaid && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => onMarkPaid(split.id)}
+                                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-gray-400 text-center py-8">No bill groups yet. Add a split to see rent and other bills here.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+            <CardHeader>
               <CardTitle className="text-white">Recent Splits</CardTitle>
             </CardHeader>
             <CardContent>
@@ -512,7 +659,7 @@ export function SplitManager({ splits, userId, onAdd, onAddBulk, onUpdate, onDel
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-orange-400 mb-1">
-                <CountUp end={unpaidTotal} prefix="₹" decimals={2} duration={2} preserveValue={true} />
+                <CountUp end={totalOutstanding} prefix="₹" decimals={2} duration={2} preserveValue={true} />
               </div>
               <p className="text-xs text-gray-400">Total amount people owe you</p>
             </CardContent>
