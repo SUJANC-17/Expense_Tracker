@@ -97,8 +97,32 @@ echo ""
 
 cleanup() {
     echo "Stopping services..."
-    kill "$SERVER_PID" "$CLIENT_PID" 2>/dev/null || true
+    kill "$SERVER_PID" "$CLIENT_PID" "$TUNNEL_PID" "$WATCHDOG_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+
+# 4. Cloudflared tunnel watchdog
+TUNNEL_LOG="${SCRIPT_DIR}/tunnel.log"
+echo "Starting cloudflared tunnel watchdog..."
+
+start_tunnel() {
+    cloudflared tunnel run expensetrack >> "$TUNNEL_LOG" 2>&1 &
+    TUNNEL_PID=$!
+    echo "Tunnel PID: $TUNNEL_PID"
+}
+
+tunnel_watchdog() {
+    while true; do
+        if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+            echo "[$(date)] Tunnel died. Restarting..." | tee -a "$TUNNEL_LOG"
+            start_tunnel
+        fi
+        sleep 10
+    done
+}
+
+start_tunnel
+tunnel_watchdog &
+WATCHDOG_PID=$!
 
 wait $SERVER_PID $CLIENT_PID
