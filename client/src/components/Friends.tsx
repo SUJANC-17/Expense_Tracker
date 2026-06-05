@@ -9,9 +9,11 @@ interface Friend {
 }
 
 interface FriendBalance {
-    friend_id: number;
-    friend_name: string;
-    total_owed: number;
+    friendId: number | null;
+    friendName: string;
+    outstandingAmount: number;
+    paidAmount: number;
+    splitCount: number;
 }
 
 const Friends: React.FC = () => {
@@ -39,25 +41,8 @@ const Friends: React.FC = () => {
 
     const fetchBalances = async () => {
         try {
-            const splits = await apiClient.get('/splits');
-            const balanceMap = new Map<number, FriendBalance>();
-
-            splits.forEach((split: any) => {
-                if (!split.is_paid && split.friend_id) {
-                    const existing = balanceMap.get(split.friend_id);
-                    if (existing) {
-                        existing.total_owed += Number(split.amount);
-                    } else {
-                        balanceMap.set(split.friend_id, {
-                            friend_id: split.friend_id,
-                            friend_name: split.friend_name,
-                            total_owed: Number(split.amount)
-                        });
-                    }
-                }
-            });
-
-            setBalances(Array.from(balanceMap.values()));
+            const balances = await apiClient.get('/splits/balances');
+            setBalances(Array.isArray(balances) ? balances : []);
         } catch (error) {
             console.error('Error fetching balances:', error);
         }
@@ -96,8 +81,8 @@ const Friends: React.FC = () => {
     };
 
     const getBalanceForFriend = (friendId: number): number => {
-        const balance = balances.find(b => b.friend_id === friendId);
-        return balance ? balance.total_owed : 0;
+        const balance = balances.find(b => b.friendId === friendId);
+        return balance ? balance.outstandingAmount : 0;
     };
 
     if (loading) {

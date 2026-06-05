@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
+import { getOutstandingSplitBalances } from '../services/splitBalanceService.js';
 
 function monthTotals(uid: string, year: string, month: string) {
     const income = db.prepare(
@@ -42,10 +43,9 @@ function summaryPayload(uid: string, year: string, month: string) {
          WHERE e.user_id = ? AND strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?
          GROUP BY c.name`
     ).all(uid, year, month);
-    const unpaid = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM splits WHERE user_id = ? AND is_paid = 0'
-    ).get(uid) as any;
     const totalExpense = totals.expense + totals.splitExpense;
+    const unpaidSplitBalances = getOutstandingSplitBalances(uid, { year, month });
+    const totalUnpaidSplits = unpaidSplitBalances.reduce((sum, split) => sum + split.outstandingAmount, 0);
 
     return {
         year: Number(year),
@@ -55,7 +55,8 @@ function summaryPayload(uid: string, year: string, month: string) {
         balance: totals.income - totalExpense + totals.splitIncome,
         all_time_balance: allTimeBalance(uid),
         expenses_by_category: expensesByCategory,
-        total_unpaid_splits: Number(unpaid?.total || 0),
+        total_unpaid_splits: totalUnpaidSplits,
+        unpaid_split_balances: unpaidSplitBalances,
     };
 }
 
@@ -114,7 +115,13 @@ export const getDetailedSummary = (req: AuthRequest, res: Response): void => {
             "SELECT id, friend_name, amount, description, date, is_paid FROM splits WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ? ORDER BY date DESC"
         ).all(uid, year, formattedMonth);
 
-        res.json({ ...base, incomes, expenses, splits });
+        res.json({
+            ...base,
+            incomes,
+            expenses,
+            splits,
+            unpaid_split_balances: getOutstandingSplitBalances(uid, { year: String(year), month: formattedMonth }),
+        });
     } catch (error) {
         console.error('Error fetching detailed summary:', error);
         res.status(500).json({ error: 'Failed to fetch detailed summary' });

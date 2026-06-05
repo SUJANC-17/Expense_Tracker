@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
+import { getOutstandingSplitBalances, roundCurrency } from '../services/splitBalanceService.js';
 
 // Get all split expenses for user
 export const getSplits = (req: AuthRequest, res: Response): void => {
@@ -75,10 +76,41 @@ export const addSplitBulk = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const normalizedTotalAmount = roundCurrency(parseFloat(totalAmount));
+        const normalizedUserShare = userShare === undefined || userShare === null || userShare === ''
+            ? 0
+            : roundCurrency(parseFloat(userShare));
+        const normalizedSplits = splits.map((split) => ({
+            ...split,
+            amount: roundCurrency(parseFloat(split.amount)),
+        }));
+        const assignedTotal = roundCurrency(
+            normalizedUserShare + normalizedSplits.reduce((sum, split) => sum + split.amount, 0)
+        );
+
+        if (normalizedTotalAmount <= 0) {
+            res.status(400).json({ error: 'Total amount must be greater than 0' });
+            return;
+        }
+
+        if (normalizedSplits.length === 0) {
+            res.status(400).json({ error: 'At least one friend split is required' });
+            return;
+        }
+
+        if (normalizedUserShare <= 0) {
+            res.status(400).json({ error: 'Payer share is required. The payer must be included in the split.' });
+            return;
+        }
+
+        if (Math.abs(assignedTotal - normalizedTotalAmount) > 0.01) {
+            res.status(400).json({ error: 'Split shares must add up to the total amount' });
+            return;
+        }
 
         db.transaction(() => {
             // 1. Handle user's personal share as an expense
-            if (userShare && parseFloat(userShare) > 0) {
+            if (normalizedUserShare > 0) {
                 // Find 'Split' category ID
                 let category = db.prepare('SELECT id FROM categories WHERE name = ?').get('Split') as any;
 
@@ -91,15 +123,15 @@ export const addSplitBulk = (req: AuthRequest, res: Response): void => {
 
                 db.prepare(
                     'INSERT INTO expenses (user_id, amount, category_id, description, date) VALUES (?, ?, ?, ?, ?)'
-                ).run(uid, parseFloat(userShare), categoryId, description || 'Personal share of split', date);
+                ).run(uid, normalizedUserShare, categoryId, description || 'Personal share of split', date);
             }
 
             // 2. Handle friend splits
             const insertSplit = db.prepare(
                 'INSERT INTO splits (user_id, friend_id, friend_name, amount, description, date, is_paid) VALUES (?, ?, ?, ?, ?, ?, 0)'
             );
-            for (const split of splits) {
-                insertSplit.run(uid, split.friend_id || null, split.friend_name || null, parseFloat(split.amount), description || null, date);
+            for (const split of normalizedSplits) {
+                insertSplit.run(uid, split.friend_id || null, split.friend_name || null, split.amount, description || null, date);
             }
         })();
 
@@ -196,5 +228,21 @@ export const deleteSplit = (req: AuthRequest, res: Response): void => {
     } catch (error) {
         console.error('Error deleting split:', error);
         res.status(500).json({ error: 'Failed to delete split' });
+    }
+};
+
+export const getSplitBalances = (req: AuthRequest, res: Response): void => {
+    try {
+        const uid = req.user?.uid!;
+        const { year, month } = req.query;
+        const balances = getOutstandingSplitBalances(uid, {
+            ...(typeof year === 'string' ? { year } : {}),
+            ...(typeof month === 'string' ? { month } : {}),
+        });
+
+        res.json(balances);
+    } catch (error) {
+        console.error('Error fetching split balances:', error);
+        res.status(500).json({ error: 'Failed to fetch split balances' });
     }
 };

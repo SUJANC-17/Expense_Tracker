@@ -36,11 +36,14 @@ export interface Expense {
 export interface Split {
     id: number;
     userId: string;
+    friendId?: number | null;
     friendName: string;
     amount: number;
     description: string;
     date: string;
     isPaid: boolean;
+    paidAt?: string | null;
+    createdAt?: string;
 }
 
 export interface Category {

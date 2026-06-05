@@ -11,6 +11,14 @@ interface DashboardProps {
   splits: Split[];
 }
 
+interface UnpaidSplitBalance {
+  key: string;
+  friendId: number | null;
+  friendName: string;
+  outstandingAmount: number;
+  splitCount: number;
+}
+
 export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -31,9 +39,30 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear && !split.isPaid;
     });
 
+    const unpaidSplitBalances = Array.from(
+      currentUnpaidSplits.reduce((balances, split) => {
+        const key = split.friendId !== null && split.friendId !== undefined
+          ? `friend:${split.friendId}`
+          : `name:${split.friendName.trim().toLowerCase() || 'unknown'}`;
+
+        const existing = balances.get(key) || {
+          key,
+          friendId: split.friendId ?? null,
+          friendName: split.friendName?.trim() || 'Unknown',
+          outstandingAmount: 0,
+          splitCount: 0,
+        };
+
+        existing.outstandingAmount += split.amount;
+        existing.splitCount += 1;
+        balances.set(key, existing);
+        return balances;
+      }, new Map<string, UnpaidSplitBalance>()).values(),
+    ).sort((a, b) => b.outstandingAmount - a.outstandingAmount || a.friendName.localeCompare(b.friendName));
+
     const totalIncome = currentIncomes.reduce((sum, income) => sum + income.amount, 0);
     const totalExpenses = currentExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const totalUnpaid = currentUnpaidSplits.reduce((sum, split) => sum + split.amount, 0);
+    const totalUnpaid = unpaidSplitBalances.reduce((sum, split) => sum + split.outstandingAmount, 0);
 
     const allTimeIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
     const allTimeExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -52,7 +81,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
       totalExpenses,
       balance,
       expensesByCategory,
-      unpaidSplits: currentUnpaidSplits,
+      unpaidSplitBalances,
       totalUnpaid,
     };
   }, [incomes, expenses, splits, currentMonth, currentYear]);
@@ -142,7 +171,7 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
             <Users className="h-5 w-5 text-orange-400" />
           </CardHeader>
           <CardContent>
-            {summary.unpaidSplits.length > 0 ? (
+            {summary.unpaidSplitBalances.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between pb-3 border-b border-white/10">
                   <span className="text-gray-300">Total Unpaid</span>
@@ -150,15 +179,15 @@ export function Dashboard({ incomes, expenses, splits }: DashboardProps) {
                     <CountUp end={summary.totalUnpaid} prefix="₹" decimals={2} duration={2} preserveValue={true} />
                   </span>
                 </div>
-                {summary.unpaidSplits.slice(0, 3).map((split) => (
-                  <div key={split.id} className="flex items-center justify-between">
+                {summary.unpaidSplitBalances.slice(0, 3).map((split) => (
+                  <div key={split.key} className="flex items-center justify-between">
                     <span className="text-gray-300">{split.friendName}</span>
-                    <span className="text-white">₹{split.amount.toFixed(2)}</span>
+                    <span className="text-white">₹{split.outstandingAmount.toFixed(2)}</span>
                   </div>
                 ))}
-                {summary.unpaidSplits.length > 3 && (
+                {summary.unpaidSplitBalances.length > 3 && (
                   <p className="text-gray-400 text-sm text-center pt-2">
-                    +{summary.unpaidSplits.length - 3} more
+                    +{summary.unpaidSplitBalances.length - 3} more
                   </p>
                 )}
               </div>

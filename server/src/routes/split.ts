@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import {
     getSplits,
     getUnpaidSplits,
+    getSplitBalances,
     addSplit,
     addSplitBulk,
     markSplitPaid,
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.get('/', authenticateToken, getSplits);
 router.get('/unpaid', authenticateToken, getUnpaidSplits);
+router.get('/balances', authenticateToken, getSplitBalances);
 router.post('/bulk', authenticateToken, addSplitBulk);
 router.post('/', authenticateToken, addSplit);
 router.put('/:id', authenticateToken, updateSplit);
