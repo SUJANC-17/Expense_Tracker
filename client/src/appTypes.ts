@@ -15,6 +15,34 @@ export interface ReminderSettings {
     reminderTime: string;
 }
 
+export type BudgetPeriodType = 'daily' | 'weekly' | 'monthly';
+
+export interface Budget {
+    id: number;
+    userId: string;
+    periodType: BudgetPeriodType;
+    amount: number;
+    createdAt: string;
+    updatedAt: string;
+    isActive: boolean;
+}
+
+export interface BudgetSavingsRange {
+    savings: number;
+    budget: number;
+    range_label: string;
+}
+
+export interface BudgetSavingsResponse {
+    period_type: BudgetPeriodType;
+    week?: BudgetSavingsRange;
+    month?: BudgetSavingsRange;
+    savings?: number | null;
+    budget?: number | null;
+    range_label?: string;
+    message?: string;
+}
+
 export interface Income {
     id: number;
     userId: string;

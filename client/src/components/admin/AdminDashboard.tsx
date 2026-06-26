@@ -22,6 +22,14 @@ import {
 } from 'lucide-react';
 import { adminApi } from '../../utils/adminApi';
 
+const CATEGORY_UPDATE_KEY = 'expenseTracker_categories_updated_at';
+
+function broadcastCategoryUpdate() {
+    const value = Date.now().toString();
+    localStorage.setItem(CATEGORY_UPDATE_KEY, value);
+    window.dispatchEvent(new Event('expenseTracker:categories-updated'));
+}
+
 interface SystemHealth {
     status: string;
     startedAt: string;
@@ -248,6 +256,7 @@ export default function AdminDashboard() {
             await adminApi.post('/admin/categories', { name: newCategoryName });
             setNewCategoryName('');
             fetchCategories();
+            broadcastCategoryUpdate();
         } catch (err) {
             alert('Failed to add category');
         }
@@ -259,6 +268,7 @@ export default function AdminDashboard() {
             await adminApi.put(`/admin/categories/${id}`, { name: editCategoryName });
             setEditingCategory(null);
             fetchCategories();
+            broadcastCategoryUpdate();
         } catch (err) {
             alert('Failed to update category');
         }
@@ -269,6 +279,7 @@ export default function AdminDashboard() {
         try {
             await adminApi.delete(`/admin/categories/${id}`);
             fetchCategories();
+            broadcastCategoryUpdate();
         } catch (err) {
             alert('Failed to delete category');
         }

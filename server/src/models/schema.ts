@@ -142,11 +142,25 @@ export const initializeDatabase = (): void => {
       )
     `);
 
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        period_type TEXT NOT NULL CHECK (period_type IN ('daily', 'weekly', 'monthly')),
+        amount REAL NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        updated_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     db.exec('CREATE INDEX IF NOT EXISTS idx_friends_user_name ON friends(user_id, name)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_incomes_user_date ON incomes(user_id, date)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, date)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_splits_user_date ON splits(user_id, date)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_splits_user_paid ON splits(user_id, is_paid)');
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_user_period_active ON budgets(user_id, period_type) WHERE is_active = 1");
 
     // Insert default categories
     const defaultCategories = ['Food', 'Travel', 'Rent', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Split', 'Other'];

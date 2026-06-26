@@ -32,7 +32,6 @@ import {
     TrendingUp,
     TrendingDown,
     Users,
-    FileText,
     UserPlus,
     LogOut,
     Menu,
@@ -45,6 +44,7 @@ import {
     Loader2,
     KeyRound,
     Link2,
+    Settings2,
 } from 'lucide-react';
 import type { ReminderSettings } from './appTypes';
 
@@ -53,9 +53,10 @@ const IncomeManager = lazy(() => import('./components/IncomeManager').then((modu
 const ExpenseManager = lazy(() => import('./components/ExpenseManager').then((module) => ({ default: module.ExpenseManager })));
 const SplitManager = lazy(() => import('./components/SplitManager').then((module) => ({ default: module.SplitManager })));
 const FriendsManager = lazy(() => import('./components/FriendsManager').then((module) => ({ default: module.FriendsManager })));
-const Reports = lazy(() => import('./components/Reports').then((module) => ({ default: module.Reports })));
+const SettingsPage = lazy(() => import('./components/Settings').then((module) => ({ default: module.SettingsPage })));
 
-type TabValue = 'dashboard' | 'income' | 'expenses' | 'splits' | 'friends' | 'reports';
+type TabValue = 'dashboard' | 'income' | 'expenses' | 'splits' | 'friends' | 'settings';
+type SettingsSection = 'budget' | 'reports';
 
 const navItems = [
     { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -63,7 +64,7 @@ const navItems = [
     { value: 'expenses', label: 'Expenses', icon: TrendingDown },
     { value: 'splits', label: 'Splits', icon: Users },
     { value: 'friends', label: 'Friends', icon: UserPlus },
-    { value: 'reports', label: 'Reports', icon: FileText },
+    { value: 'settings', label: 'Settings', icon: Settings2 },
 ] as const;
 
 const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
@@ -79,7 +80,25 @@ function getInitials(name?: string, email?: string) {
 }
 
 function isTabValue(value: string | null): value is TabValue {
-    return value === 'dashboard' || value === 'income' || value === 'expenses' || value === 'splits' || value === 'friends' || value === 'reports';
+    return value === 'dashboard' || value === 'income' || value === 'expenses' || value === 'splits' || value === 'friends' || value === 'settings';
+}
+
+function getInitialAppState(): { tab: TabValue; section: SettingsSection } {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+
+    if (path === '/settings/reports') {
+        return { tab: 'settings', section: 'reports' };
+    }
+
+    if (path === '/settings') {
+        return { tab: 'settings', section: 'budget' };
+    }
+
+    const storedTab = sessionStorage.getItem('expenseTracker_activeTab');
+    return {
+        tab: isTabValue(storedTab) ? storedTab : 'dashboard',
+        section: 'budget',
+    };
 }
 
 function hasProvider(user: { providerIds?: string[]; hasPassword?: boolean; hasGoogle?: boolean } | null, providerId: 'password' | 'google.com') {
@@ -105,14 +124,9 @@ export default function UserApp() {
         logout,
     } = useAuth();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<TabValue>(() => {
-        const urlTab = new URLSearchParams(window.location.search).get('tab');
-        if (isTabValue(urlTab)) {
-            return urlTab;
-        }
-        const storedTab = sessionStorage.getItem('expenseTracker_activeTab');
-        return isTabValue(storedTab) ? storedTab : 'dashboard';
-    });
+    const initialAppState = getInitialAppState();
+    const [activeTab, setActiveTab] = useState<TabValue>(initialAppState.tab);
+    const [settingsSection, setSettingsSection] = useState<SettingsSection>(initialAppState.section);
 
     const {
         incomes,
@@ -120,6 +134,8 @@ export default function UserApp() {
         splits,
         friends,
         loading: dataLoading,
+        budgets,
+        categories,
         addIncome,
         updateIncome,
         deleteIncome,
@@ -132,6 +148,8 @@ export default function UserApp() {
         markSplitPaid,
         addFriend,
         deleteFriend,
+        saveBudget,
+        removeBudget,
     } = useData(user?.id);
 
     const [showReminderDialog, setShowReminderDialog] = useState(false);
@@ -166,6 +184,38 @@ export default function UserApp() {
     }, [user]);
 
     useEffect(() => {
+        const syncFromLocation = () => {
+            const path = window.location.pathname.replace(/\/+$/, '') || '/';
+            if (path === '/settings/reports') {
+                setActiveTab('settings');
+                setSettingsSection('reports');
+                return;
+            }
+
+            if (path === '/settings') {
+                setActiveTab('settings');
+                setSettingsSection('budget');
+                return;
+            }
+
+            const urlTab = new URLSearchParams(window.location.search).get('tab');
+            if (isTabValue(urlTab)) {
+                setActiveTab(urlTab);
+                sessionStorage.setItem('expenseTracker_activeTab', urlTab);
+                return;
+            }
+
+            const storedTab = sessionStorage.getItem('expenseTracker_activeTab');
+            if (isTabValue(storedTab)) {
+                setActiveTab(storedTab);
+            }
+        };
+
+        window.addEventListener('popstate', syncFromLocation);
+        return () => window.removeEventListener('popstate', syncFromLocation);
+    }, []);
+
+    useEffect(() => {
         const active = () => {
             if (!showReminderDialog || !user) return;
 
@@ -196,11 +246,32 @@ export default function UserApp() {
         return active();
     }, [showReminderDialog, user]);
 
+    const navigateSettings = (section: SettingsSection) => {
+        const nextPath = section === 'reports' ? '/settings/reports' : '/settings';
+        setActiveTab('settings');
+        setSettingsSection(section);
+        sessionStorage.setItem('expenseTracker_activeTab', 'settings');
+        window.history.pushState({}, '', nextPath);
+    };
+
     const handleTabChange = (value: string) => {
         const next = value as TabValue;
+        if (next === 'settings') {
+            navigateSettings('budget');
+            setMobileMenuOpen(false);
+            return;
+        }
+
         setActiveTab(next);
         sessionStorage.setItem('expenseTracker_activeTab', next);
+        if (window.location.pathname.startsWith('/settings')) {
+            window.history.pushState({}, '', '/');
+        }
         setMobileMenuOpen(false);
+    };
+
+    const handleSettingsSectionChange = (section: SettingsSection) => {
+        navigateSettings(section);
     };
 
     const handleSaveReminder = async () => {
@@ -681,7 +752,13 @@ export default function UserApp() {
                     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                         <Suspense fallback={<SkeletonLoader />}>
                             <TabsContent value="dashboard" className="mt-0">
-                                <Dashboard incomes={incomes} expenses={expenses} splits={splits} />
+                                <Dashboard
+                                    incomes={incomes}
+                                    expenses={expenses}
+                                    splits={splits}
+                                    budgets={budgets}
+                                    categories={categories}
+                                />
                             </TabsContent>
 
                             <TabsContent value="income" className="mt-0">
@@ -697,6 +774,7 @@ export default function UserApp() {
                             <TabsContent value="expenses" className="mt-0">
                                 <ExpenseManager
                                     expenses={expenses}
+                                    categories={categories}
                                     userId={user.id}
                                     onAdd={addExpense}
                                     onUpdate={updateExpense}
@@ -719,8 +797,18 @@ export default function UserApp() {
                                 <FriendsManager friends={friends} onAdd={addFriend} onDelete={deleteFriend} />
                             </TabsContent>
 
-                            <TabsContent value="reports" className="mt-0">
-                                <Reports incomes={incomes} expenses={expenses} splits={splits} />
+                            <TabsContent value="settings" className="mt-0">
+                                <SettingsPage
+                                    budgets={budgets}
+                                    saveBudget={saveBudget}
+                                    removeBudget={removeBudget}
+                                    section={settingsSection}
+                                    onSectionChange={handleSettingsSectionChange}
+                                    incomes={incomes}
+                                    expenses={expenses}
+                                    splits={splits}
+                                    categories={categories}
+                                />
                             </TabsContent>
                         </Suspense>
                     </Tabs>
