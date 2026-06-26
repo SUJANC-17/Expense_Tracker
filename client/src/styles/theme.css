@@ -124,8 +124,15 @@
     @apply border-border outline-ring/50;
   }
 
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: #09090b;
   }
 
   /**
@@ -135,6 +142,7 @@
 
   html {
     font-size: var(--font-size);
+    color-scheme: dark;
   }
 
   h1 {
