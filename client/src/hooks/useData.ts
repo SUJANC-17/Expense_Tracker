@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Income, Expense, Split, Friend } from '../appTypes';
+import type { Income, Expense, Split, Friend, Budget, BudgetPeriodType, Category } from '../appTypes';
 import { apiClient } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -8,23 +8,37 @@ export const useData = (userId: string | undefined) => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [splits, setSplits] = useState<Split[]>([]);
     const [friends, setFriends] = useState<Friend[]>([]);
+    const [budgets, setBudgets] = useState<Budget[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const fetchCategories = useCallback(async () => {
+        try {
+            const categoriesData = await apiClient.get('/expenses/categories');
+            setCategories(categoriesData);
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    }, []);
 
     // Fetch all data function - defined before useEffect to avoid lint errors
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            const [incomesData, expensesData, splitsData, friendsData] = await Promise.all([
+            const [incomesData, expensesData, splitsData, friendsData, budgetsData] = await Promise.all([
                 apiClient.get('/incomes'),
                 apiClient.get('/expenses'),
                 apiClient.get('/splits'),
                 apiClient.get('/friends'),
+                apiClient.get('/budgets'),
             ]);
             console.log('Fetched Data:', { incomes: incomesData, expenses: expensesData });
             setIncomes(incomesData);
             setExpenses(expensesData);
             setSplits(splitsData);
             setFriends(friendsData);
+            setBudgets(budgetsData);
+            await fetchCategories();
         } catch (error) {
             console.error('CRITICAL: Error fetching all data:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -33,7 +47,7 @@ export const useData = (userId: string | undefined) => {
             console.log('Data fetch attempt completed.');
             setLoading(false);
         }
-    }, []);
+    }, [fetchCategories]);
 
     // Fetch all data when userId changes
     useEffect(() => {
@@ -45,9 +59,33 @@ export const useData = (userId: string | undefined) => {
             setExpenses([]);
             setSplits([]);
             setFriends([]);
+            setBudgets([]);
+            setCategories([]);
             setLoading(false);
         }
     }, [userId, fetchAllData]);
+
+    useEffect(() => {
+        const handleCategoriesUpdated = () => {
+            if (!userId) return;
+            void fetchCategories();
+        };
+
+        const handleStorageUpdate = (event: StorageEvent) => {
+            if (!userId) return;
+            if (event.key === 'expenseTracker_categories_updated_at') {
+                void fetchCategories();
+            }
+        };
+
+        window.addEventListener('expenseTracker:categories-updated', handleCategoriesUpdated as EventListener);
+        window.addEventListener('storage', handleStorageUpdate);
+
+        return () => {
+            window.removeEventListener('expenseTracker:categories-updated', handleCategoriesUpdated as EventListener);
+            window.removeEventListener('storage', handleStorageUpdate);
+        };
+    }, [fetchCategories, userId]);
 
     // Income methods
     const addIncome = async (income: Omit<Income, 'id'>) => {
@@ -217,10 +255,48 @@ export const useData = (userId: string | undefined) => {
         }
     };
 
+    const saveBudget = async (periodType: BudgetPeriodType, amount: number) => {
+        try {
+            const saved = await apiClient.post('/budgets', {
+                period_type: periodType,
+                amount,
+            }) as Budget;
+
+            setBudgets((prev) => {
+                const next = prev.filter((budget) => budget.periodType !== saved.periodType);
+                return [...next, saved].sort((a, b) => {
+                    const order: Record<BudgetPeriodType, number> = { daily: 0, weekly: 1, monthly: 2 };
+                    return order[a.periodType] - order[b.periodType];
+                });
+            });
+
+            toast.success(`${periodType.charAt(0).toUpperCase() + periodType.slice(1)} budget saved`);
+            return saved;
+        } catch (error) {
+            console.error('Error saving budget:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to save budget');
+            throw error;
+        }
+    };
+
+    const removeBudget = async (id: number) => {
+        try {
+            await apiClient.delete(`/budgets/${id}`);
+            setBudgets((prev) => prev.filter((budget) => budget.id !== id));
+            toast.success('Budget removed');
+        } catch (error) {
+            console.error('Error removing budget:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to remove budget');
+            throw error;
+        }
+    };
+
     return {
         incomes,
         expenses,
         splits,
+        budgets,
+        categories,
         loading,
         addIncome,
         updateIncome,
@@ -236,6 +312,8 @@ export const useData = (userId: string | undefined) => {
         friends,
         addFriend,
         deleteFriend,
+        saveBudget,
+        removeBudget,
         refreshData: fetchAllData,
     };
 };

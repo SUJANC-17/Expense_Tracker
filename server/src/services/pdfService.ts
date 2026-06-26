@@ -15,215 +15,273 @@ interface MonthlyData {
   unpaid_splits: Array<{ friend_name: string; amount: number; description: string; date: string }>;
 }
 
-const COLORS = {
-  primary: '#4f46e5',
-  secondary: '#6366f1',
-  text: '#1e293b',
-  textLight: '#64748b',
-  success: '#10b981',
-  danger: '#ef4444',
-  warning: '#f59e0b',
-  background: '#f8fafc',
-  border: '#e2e8f0',
-  white: '#ffffff',
+// ─── Corporate Color Palette ───────────────────────────────────────────────
+const C = {
+  headerBg:     '#1a2340',
+  headerText:   '#ffffff',
+  accentBlue:   '#2563eb',
+  accentGold:   '#b8960c',
+  sectionTitle: '#1a2340',
+  text:         '#1e293b',
+  textMuted:    '#64748b',
+  divider:      '#cbd5e1',
+  success:      '#15803d',
+  danger:       '#b91c1c',
+  white:        '#ffffff',
 };
 
+const PAGE_H = 841.89;
+const PAGE_W = 595.28;
+const MARGIN  = 50;
+const FOOTER_SAFE = PAGE_H - 60;
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
+    .toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
 function getMonthName(month: number): string {
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  return months[month - 1] || 'Unknown';
+  return ['January','February','March','April','May','June',
+          'July','August','September','October','November','December'][month - 1] || '';
 }
 
-function drawCard(doc: any, x: number, y: number, width: number, height: number, label: string, value: string, accentColor: string) {
-  doc
-    .roundedRect(x, y, width, height, 8)
-    .fillColor(COLORS.white)
-    .fillAndStroke(COLORS.border, COLORS.border);
-
-  doc
-    .rect(x, y, 4, height)
-    .fill(accentColor);
-
-  doc
-    .fillColor(COLORS.textLight)
-    .fontSize(9)
-    .font('Helvetica-Bold')
-    .text(label, x + 15, y + 20);
-
-  doc
-    .fillColor(COLORS.text)
-    .fontSize(16)
-    .font('Helvetica-Bold')
-    .text(value, x + 15, y + 40, { width: width - 25 });
+function formatRs(amount: number): string {
+  return `Rs. ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 }
 
+function drawSummaryCard(
+  doc: any,
+  x: number, y: number,
+  width: number, height: number,
+  label: string, value: string,
+  accentColor: string
+) {
+  doc.roundedRect(x + 2, y + 2, width, height, 4).fillColor('#d1d5db').fill();
+  doc.roundedRect(x, y, width, height, 4).fillColor(C.white).fill();
+  doc.rect(x, y, width, 5).fillColor(accentColor).fill();
+  doc.rect(x, y + 5, 2, height - 5).fillColor(accentColor).fill();
+
+  doc
+    .fillColor(C.textMuted)
+    .fontSize(7.5)
+    .font('Helvetica-Bold')
+    .text(label.toUpperCase(), x + 12, y + 14, { width: width - 16, lineBreak: false });
+
+  doc
+    .fillColor(C.text)
+    .fontSize(13)
+    .font('Helvetica-Bold')
+    .text(value, x + 12, y + 30, { width: width - 16, lineBreak: false });
+}
+
+function drawSectionHeading(doc: any, title: string, y: number): number {
+  if (y + 60 > FOOTER_SAFE) {
+    doc.addPage();
+    y = MARGIN;
+  }
+
+  doc.rect(MARGIN, y, 4, 18).fillColor(C.accentBlue).fill();
+
+  doc
+    .fillColor(C.sectionTitle)
+    .fontSize(12)
+    .font('Helvetica-Bold')
+    .text(title, MARGIN + 14, y + 3, { lineBreak: false });
+
+  doc
+    .moveTo(MARGIN, y + 22)
+    .lineTo(PAGE_W - MARGIN, y + 22)
+    .strokeColor(C.divider)
+    .lineWidth(0.5)
+    .stroke();
+
+  const nextY = y + 34;
+  doc.y = nextY;
+  return nextY;
+}
+
+function drawFooter(doc: any, pageIndex: number, totalPages: number, month: number, year: number) {
+  doc
+    .moveTo(MARGIN, PAGE_H - 45)
+    .lineTo(PAGE_W - MARGIN, PAGE_H - 45)
+    .strokeColor(C.accentGold)
+    .lineWidth(1)
+    .stroke();
+
+  doc
+    .fillColor(C.textMuted)
+    .fontSize(7.5)
+    .font('Helvetica')
+    .text(
+      `EXPENSE TRACKER  |  Monthly Report — ${getMonthName(month)} ${year}`,
+      MARGIN, PAGE_H - 32,
+      { width: 300, lineBreak: false }
+    );
+
+  doc
+    .fillColor(C.textMuted)
+    .fontSize(7.5)
+    .font('Helvetica')
+    .text(
+      `Page ${pageIndex + 1} of ${totalPages}`,
+      PAGE_W - MARGIN - 150, PAGE_H - 32,
+      { width: 150, align: 'right', lineBreak: false }
+    );
+}
+
+// ─── Main Export ───────────────────────────────────────────────────────────
 export const generateMonthlyPDF = async (data: MonthlyData): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
-      margin: 50,
+      margin: MARGIN,
       size: 'A4',
       bufferPages: true,
+      layout: 'portrait',
     });
-    const chunks: Buffer[] = [];
 
+    const chunks: Buffer[] = [];
     doc.on('data', (chunk: any) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    // Header
-    doc
-      .rect(0, 0, doc.page.width, 120)
-      .fill(COLORS.primary);
+    doc.rect(0, 0, PAGE_W, 110).fillColor(C.headerBg).fill();
+    doc.rect(0, 108, PAGE_W, 3).fillColor(C.accentGold).fill();
 
     doc
-      .fillColor(COLORS.white)
-      .fontSize(28)
-      .font('Helvetica-Bold')
-      .text('Monthly Financial Summary', 50, 45)
-      .fontSize(14)
-      .font('Helvetica')
-      .text(`${getMonthName(data.month)} ${data.year}`, 50, 80);
+      .fillColor('#94a3b8').fontSize(8).font('Helvetica')
+      .text('EXPENSE TRACKER', MARGIN, 18, { characterSpacing: 2, lineBreak: false });
 
     doc
-      .fontSize(10)
-      .text('Prepared for:', doc.page.width - 250, 55, { align: 'right', width: 200 })
-      .font('Helvetica-Bold')
-      .text(data.user_email, doc.page.width - 250, 70, { align: 'right', width: 200 });
+      .fillColor(C.headerText).fontSize(22).font('Helvetica-Bold')
+      .text('Monthly Financial Report', MARGIN, 34, { lineBreak: false });
 
-    doc.y = 150;
-
-    // Summary section
     doc
-      .fillColor(COLORS.text)
-      .fontSize(18)
-      .font('Helvetica-Bold')
-      .text('Overview', 50, doc.y)
-      .moveDown(0.8);
+      .fillColor('#93c5fd').fontSize(11).font('Helvetica')
+      .text(`${getMonthName(data.month)} ${data.year}`, MARGIN, 62, { lineBreak: false });
 
-    const summaryY = doc.y;
-    const boxWidth = 150;
-    const boxGap = 15;
+    doc
+      .fillColor('#94a3b8').fontSize(8).font('Helvetica')
+      .text('PREPARED FOR', PAGE_W - 200, 28, { width: 150, align: 'right', lineBreak: false });
 
-    drawCard(doc, 50, summaryY, boxWidth, 80, 'TOTAL INCOME', `Rs.${data.total_income.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, COLORS.success);
-    drawCard(doc, 50 + boxWidth + boxGap, summaryY, boxWidth, 80, 'TOTAL EXPENSES', `Rs.${data.total_expense.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, COLORS.danger);
+    doc
+      .fillColor(C.headerText).fontSize(9.5).font('Helvetica-Bold')
+      .text(data.user_email, PAGE_W - 200, 44, { width: 150, align: 'right', lineBreak: false });
 
-    const balanceColor = data.balance >= 0 ? COLORS.primary : COLORS.warning;
-    drawCard(doc, 50 + (boxWidth + boxGap) * 2, summaryY, boxWidth, 80, 'NET BALANCE', `Rs.${data.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, balanceColor);
+    doc
+      .fillColor('#94a3b8').fontSize(8).font('Helvetica')
+      .text(
+        `Generated: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+        PAGE_W - 200, 62,
+        { width: 150, align: 'right', lineBreak: false }
+      );
 
-    doc.y = summaryY + 110;
+    const cardW = 152;
+    const cardH = 72;
+    const gap   = 12;
+    const cardY = 128;
+
+    drawSummaryCard(doc, MARGIN,                    cardY, cardW, cardH, 'Total Income',   formatRs(data.total_income),  C.success);
+    drawSummaryCard(doc, MARGIN + cardW + gap,      cardY, cardW, cardH, 'Total Expenses', formatRs(data.total_expense), C.danger);
+    drawSummaryCard(doc, MARGIN + (cardW + gap) * 2, cardY, cardW, cardH, 'Net Balance',    formatRs(data.balance),       data.balance >= 0 ? C.success : C.danger);
+
+    doc.y = cardY + cardH + 24;
+
+    const tableOptions = {
+      prepareHeader: () => doc.font('Helvetica-Bold').fontSize(9),
+      prepareRow:    () => doc.font('Helvetica').fontSize(8.5),
+      padding:       5,
+      columnSpacing: 4,
+      bottomMargin:  60,
+    };
 
     const runTables = async () => {
       try {
-        if (data.expenses_by_category && data.expenses_by_category.length > 0) {
-          doc.moveDown(2);
-          const catTable = {
-            title: 'Expenses by Category',
+        if (data.expenses_by_category?.length > 0) {
+          drawSectionHeading(doc, 'Expenses by Category', doc.y);
+
+          await doc.table({
             headers: [
-              { label: 'Category', property: 'category', width: 200, renderer: null },
-              { label: 'Share', property: 'percentage', width: 100, renderer: null },
-              { label: 'Amount', property: 'total', width: 150, renderer: null },
+              { label: 'Category',  property: 'category',   width: 220 },
+              { label: 'Share (%)', property: 'percentage', width: 120 },
+              { label: 'Amount',    property: 'total',      width: 130 },
             ],
             rows: data.expenses_by_category.map((cat) => [
               cat.category,
               data.total_expense > 0 ? `${((cat.total / data.total_expense) * 100).toFixed(1)}%` : '0.0%',
-              `Rs.${cat.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+              formatRs(cat.total),
             ]),
-          };
-          await doc.table(catTable, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(10),
-            prepareRow: () => doc.font('Helvetica').fontSize(9),
-          });
+          }, tableOptions);
         }
 
-        if (data.incomes && data.incomes.length > 0) {
-          doc.moveDown(2);
-          const incTable = {
-            title: 'Income Entries',
+        if (data.incomes?.length > 0) {
+          if (doc.y + 60 < FOOTER_SAFE) doc.y += 16;
+          drawSectionHeading(doc, 'Income Entries', doc.y);
+
+          await doc.table({
             headers: [
-              { label: 'Date', property: 'date', width: 80, renderer: null },
-              { label: 'Source', property: 'source', width: 120, renderer: null },
-              { label: 'Description', property: 'description', width: 150, renderer: null },
-              { label: 'Amount', property: 'amount', width: 100, renderer: null },
+              { label: 'Date',        property: 'date',        width: 80 },
+              { label: 'Source',      property: 'source',      width: 130 },
+              { label: 'Description', property: 'description', width: 175 },
+              { label: 'Amount',      property: 'amount',      width: 110 },
             ],
             rows: data.incomes.map((item) => [
               formatDate(item.date),
               item.source,
-              item.description || '-',
-              `Rs.${item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+              item.description || '—',
+              formatRs(item.amount),
             ]),
-          };
-          await doc.table(incTable, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(10),
-            prepareRow: () => doc.font('Helvetica').fontSize(9),
-          });
+          }, tableOptions);
         }
 
-        if (data.expenses && data.expenses.length > 0) {
-          doc.moveDown(2);
-          const expTable = {
-            title: 'Expense Entries',
+        if (data.expenses?.length > 0) {
+          if (doc.y + 60 < FOOTER_SAFE) doc.y += 16;
+          drawSectionHeading(doc, 'Expense Entries', doc.y);
+
+          await doc.table({
             headers: [
-              { label: 'Date', property: 'date', width: 80, renderer: null },
-              { label: 'Category', property: 'category', width: 120, renderer: null },
-              { label: 'Description', property: 'description', width: 150, renderer: null },
-              { label: 'Amount', property: 'amount', width: 100, renderer: null },
+              { label: 'Date',        property: 'date',        width: 80 },
+              { label: 'Category',    property: 'category',    width: 130 },
+              { label: 'Description', property: 'description', width: 175 },
+              { label: 'Amount',      property: 'amount',      width: 110 },
             ],
             rows: data.expenses.map((item) => [
               formatDate(item.date),
               item.category,
-              item.description || '-',
-              `Rs.${item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+              item.description || '—',
+              formatRs(item.amount),
             ]),
-          };
-          await doc.table(expTable, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(10),
-            prepareRow: () => doc.font('Helvetica').fontSize(9),
-          });
+          }, tableOptions);
         }
 
-        if (data.unpaid_splits && data.unpaid_splits.length > 0) {
-          doc.moveDown(2);
-          const splitTable = {
-            title: `Pending Split Balances (Total: Rs.${data.total_unpaid_splits.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
+        if (data.unpaid_splits?.length > 0) {
+          if (doc.y + 60 < FOOTER_SAFE) doc.y += 16;
+          drawSectionHeading(doc,
+            `Pending Split Balances  —  Total: ${formatRs(data.total_unpaid_splits)}`,
+            doc.y
+          );
+
+          await doc.table({
             headers: [
-              { label: 'Date', property: 'date', width: 80, renderer: null },
-              { label: 'Friend', property: 'friend', width: 120, renderer: null },
-              { label: 'Description', property: 'description', width: 150, renderer: null },
-              { label: 'Amount', property: 'amount', width: 100, renderer: null },
+              { label: 'Date',        property: 'date',        width: 80 },
+              { label: 'Friend',      property: 'friend',      width: 130 },
+              { label: 'Description', property: 'description', width: 175 },
+              { label: 'Amount',      property: 'amount',      width: 110 },
             ],
             rows: data.unpaid_splits.map((item) => [
               formatDate(item.date),
               item.friend_name,
-              item.description || '-',
-              `Rs.${item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+              item.description || '—',
+              formatRs(item.amount),
             ]),
-          };
-          await doc.table(splitTable, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(10),
-            prepareRow: () => doc.font('Helvetica').fontSize(9),
-          });
+          }, tableOptions);
         }
 
         const range = doc.bufferedPageRange();
         for (let i = range.start; i < range.start + range.count; i++) {
           doc.switchToPage(i);
-          doc
-            .fillColor(COLORS.textLight)
-            .fontSize(8)
-            .font('Helvetica')
-            .text(
-              `Page ${i + 1} of ${range.count}  |  Expense Tracker  |  Generated on ${new Date().toLocaleDateString()}`,
-              0,
-              doc.page.height - 40,
-              { align: 'center' }
-            );
+          drawFooter(doc, i - range.start, range.count, data.month, data.year);
         }
 
         doc.end();

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Expense } from '../appTypes';
-import { CATEGORIES, getCategoryName } from '../utils/categories';
+import type { Category, Expense } from '../appTypes';
+import { getCategoryName } from '../utils/categories';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -26,13 +26,14 @@ const itemVariants = {
 
 interface ExpenseManagerProps {
   expenses: Expense[];
+  categories: Category[];
   userId: string;
   onAdd: (expense: Omit<Expense, 'id'>) => void;
   onUpdate: (id: number, expense: Partial<Expense>) => void;
   onDelete: (id: number) => void;
 }
 
-export function ExpenseManager({ expenses, userId, onAdd, onUpdate, onDelete }: ExpenseManagerProps) {
+export function ExpenseManager({ expenses, categories, userId, onAdd, onUpdate, onDelete }: ExpenseManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState({
@@ -130,7 +131,7 @@ export function ExpenseManager({ expenses, userId, onAdd, onUpdate, onDelete }: 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-900 border-white/20">
-                    {CATEGORIES.map((category) => (
+                    {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()} className="text-white">
                         {category.name}
                       </SelectItem>
@@ -198,7 +199,7 @@ export function ExpenseManager({ expenses, userId, onAdd, onUpdate, onDelete }: 
                       <span className="text-red-400">₹{expense.amount.toFixed(2)}</span>
                       <span className="text-gray-500">•</span>
                       <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        {getCategoryName(expense.categoryId)}
+                        {getCategoryName(expense.categoryId, categories)}
                       </span>
                     </div>
                     {expense.description && (
