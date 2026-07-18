@@ -2,15 +2,54 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 
-// Get all incomes for user
+// Get all incomes for user (supports optional ?limit=N&offset=M&year=YYYY&month=MM)
 export const getIncomes = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const rows = db.prepare(
-            'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE user_id = ? ORDER BY date DESC'
-        ).all(uid);
+        const { limit, offset, year, month } = req.query;
 
-        res.json(rows);
+        const isPaginated = limit !== undefined;
+        const limitVal  = isPaginated ? Math.max(1, Math.min(500, parseInt(String(limit), 10) || 50)) : null;
+        const offsetVal = isPaginated ? Math.max(0, parseInt(String(offset), 10) || 0) : 0;
+
+        const dateFilter = year && month
+            ? `AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`
+            : year
+            ? `AND strftime('%Y', date) = ?`
+            : '';
+        const dateParams: string[] = year && month
+            ? [String(year), String(month).padStart(2, '0')]
+            : year
+            ? [String(year)]
+            : [];
+
+        const baseWhere = `WHERE user_id = ? ${dateFilter}`;
+        const queryParams = [uid, ...dateParams];
+
+        if (isPaginated) {
+            const total = (db.prepare(
+                `SELECT COUNT(*) as cnt FROM incomes ${baseWhere}`
+            ).get(...queryParams) as any)?.cnt ?? 0;
+
+            const rows = db.prepare(
+                `SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt
+                 FROM incomes
+                 ${baseWhere}
+                 ORDER BY date DESC
+                 LIMIT ? OFFSET ?`
+            ).all(...queryParams, limitVal!, offsetVal);
+
+            res.json({ data: rows, total, limit: limitVal, offset: offsetVal });
+        } else {
+            const rows = db.prepare(
+                `SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt
+                 FROM incomes
+                 ${baseWhere}
+                 ORDER BY date DESC`
+            ).all(...queryParams);
+
+            res.json(rows);
+        }
     } catch (error) {
         console.error('Error fetching incomes:', error);
         res.status(500).json({ error: 'Failed to fetch incomes' });
