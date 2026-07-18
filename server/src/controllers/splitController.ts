@@ -3,16 +3,57 @@ import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 import { getOutstandingSplitBalances, roundCurrency } from '../services/splitBalanceService.js';
 
-// Get all split expenses for user
+// Get all split expenses for user (supports optional ?limit=N&offset=M&year=YYYY&month=MM&paid=0|1)
 export const getSplits = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const rows = db.prepare(
-            'SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE user_id = ? ORDER BY date DESC'
-        ).all(uid);
+        const { limit, offset, year, month, paid } = req.query;
 
-        console.log(`Found ${rows.length} splits`);
-        res.json(rows);
+        const isPaginated = limit !== undefined;
+        const limitVal  = isPaginated ? Math.max(1, Math.min(500, parseInt(String(limit), 10) || 50)) : null;
+        const offsetVal = isPaginated ? Math.max(0, parseInt(String(offset), 10) || 0) : 0;
+
+        const filters: string[] = [];
+        const extraParams: (string | number)[] = [];
+
+        if (year && month) {
+            filters.push(`strftime('%Y', date) = ? AND strftime('%m', date) = ?`);
+            extraParams.push(String(year), String(month).padStart(2, '0'));
+        } else if (year) {
+            filters.push(`strftime('%Y', date) = ?`);
+            extraParams.push(String(year));
+        }
+
+        if (paid !== undefined) {
+            filters.push(`is_paid = ?`);
+            extraParams.push(paid === '1' || paid === 'true' ? 1 : 0);
+        }
+
+        const extraFilter = filters.length > 0 ? `AND ${filters.join(' AND ')}` : '';
+        const baseWhere = `WHERE user_id = ? ${extraFilter}`;
+        const queryParams: (string | number)[] = [uid, ...extraParams];
+
+        const selectCols = 'id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt';
+
+        if (isPaginated) {
+            const total = (db.prepare(
+                `SELECT COUNT(*) as cnt FROM splits ${baseWhere}`
+            ).get(...queryParams) as any)?.cnt ?? 0;
+
+            const rows = db.prepare(
+                `SELECT ${selectCols} FROM splits ${baseWhere} ORDER BY date DESC LIMIT ? OFFSET ?`
+            ).all(...queryParams, limitVal!, offsetVal);
+
+            console.log(`Found ${rows.length} splits (paginated, total=${total})`);
+            res.json({ data: rows, total, limit: limitVal, offset: offsetVal });
+        } else {
+            const rows = db.prepare(
+                `SELECT ${selectCols} FROM splits ${baseWhere} ORDER BY date DESC`
+            ).all(...queryParams);
+
+            console.log(`Found ${rows.length} splits`);
+            res.json(rows);
+        }
     } catch (error) {
         console.error('Error fetching splits:', error);
         res.status(500).json({ error: 'Failed to fetch split expenses' });
@@ -32,6 +73,7 @@ export const getUnpaidSplits = (req: AuthRequest, res: Response): void => {
         res.status(500).json({ error: 'Failed to fetch unpaid splits' });
     }
 };
+
 
 // Add new split expense
 export const addSplit = (req: AuthRequest, res: Response): void => {
