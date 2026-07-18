@@ -19,3 +19,4 @@ server/data/
 !.expense_tracker.env.example
 !client/.env.example
 !server/.env.example
+tunnel.log
