@@ -54,10 +54,8 @@ export function Dashboard({ incomes, expenses, splits, budgets, categories }: Da
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
 
-    const currentUnpaidSplits = splits.filter((split) => {
-      const date = new Date(split.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear && !split.isPaid;
-    });
+    // All-time unpaid splits (not restricted to current month)
+    const currentUnpaidSplits = splits.filter((split) => !split.isPaid);
 
     const unpaidSplitBalances = Array.from(
       currentUnpaidSplits.reduce((balances, split) => {
@@ -230,7 +228,10 @@ export function Dashboard({ incomes, expenses, splits, budgets, categories }: Da
 
         <Card className="border-white/20 bg-white/10 backdrop-blur-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-white">Unpaid Split Expenses</CardTitle>
+            <div>
+              <CardTitle className="text-white">Unpaid Split Expenses</CardTitle>
+              <p className="mt-1 text-xs text-gray-400">All-time outstanding balance</p>
+            </div>
             <Users className="h-5 w-5 text-orange-400" />
           </CardHeader>
           <CardContent>

@@ -246,3 +246,38 @@ export const getSplitBalances = (req: AuthRequest, res: Response): void => {
         res.status(500).json({ error: 'Failed to fetch split balances' });
     }
 };
+
+// Mark multiple splits as paid in bulk
+export const markSplitsPaidBulk = (req: AuthRequest, res: Response): void => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+        res.status(400).json({ error: 'List of IDs must be provided' });
+        return;
+    }
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    try {
+        const uid = req.user?.uid!;
+        const updateStmt = db.prepare(
+            'UPDATE splits SET is_paid = 1, paid_at = ? WHERE id = ? AND user_id = ?'
+        );
+
+        db.transaction(() => {
+            for (const id of ids) {
+                updateStmt.run(now, id, uid);
+            }
+        })();
+
+        // Fetch all the updated split records to send back
+        const placeholders = ids.map(() => '?').join(',');
+        const updated = db.prepare(
+            `SELECT id, user_id as userId, friend_id, friend_name as friendName, friend_name, amount, description, is_paid as isPaid, is_paid, paid_at as paidAt, paid_at, date, created_at as createdAt FROM splits WHERE id IN (${placeholders}) AND user_id = ?`
+        ).all(...ids, uid);
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Error marking splits as paid in bulk:', error);
+        res.status(500).json({ error: 'Failed to mark splits as paid in bulk' });
+    }
+};
+

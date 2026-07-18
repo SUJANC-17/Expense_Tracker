@@ -109,3 +109,73 @@
 .btn-success:hover {
     background: rgba(16, 185, 129, 0.2);
 }
+
+/* ── Filter Bar ─────────────────────────────────── */
+.splits-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.splits-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, rgba(255,255,255,0.5));
+}
+
+.filter-select,
+.filter-date {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.875rem;
+    min-width: 130px;
+    height: 38px;
+}
+
+.filter-select option {
+    background: #1e1b2e;
+    color: #fff;
+}
+
+.filter-clear-btn {
+    height: 38px;
+    padding: 0 1rem;
+    font-size: 0.85rem;
+    align-self: flex-end;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    color: #fca5a5 !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.filter-clear-btn:hover {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+.filter-results-info {
+    font-size: 0.82rem;
+    color: var(--text-muted, rgba(255,255,255,0.45));
+    margin: -0.75rem 0 0.75rem 0;
+    padding: 0.4rem 0.75rem;
+    background: rgba(139, 92, 246, 0.08);
+    border-left: 3px solid rgba(139, 92, 246, 0.5);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
