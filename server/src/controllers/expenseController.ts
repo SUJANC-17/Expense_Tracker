@@ -2,19 +2,59 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
 
-// Get all expenses for user
+// Get all expenses for user (supports optional ?limit=N&offset=M&year=YYYY&month=MM)
 export const getExpenses = (req: AuthRequest, res: Response): void => {
     try {
         const uid = req.user?.uid!;
-        const rows = db.prepare(
-            `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
-             FROM expenses e
-             JOIN categories c ON e.category_id = c.id
-             WHERE e.user_id = ?
-             ORDER BY e.date DESC`
-        ).all(uid);
+        const { limit, offset, year, month } = req.query;
 
-        res.json(rows);
+        const isPaginated = limit !== undefined;
+        const limitVal  = isPaginated ? Math.max(1, Math.min(500, parseInt(String(limit), 10) || 50)) : null;
+        const offsetVal = isPaginated ? Math.max(0, parseInt(String(offset), 10) || 0) : 0;
+
+        // Build optional date filter clauses
+        const dateFilter = year && month
+            ? `AND strftime('%Y', e.date) = ? AND strftime('%m', e.date) = ?`
+            : year
+            ? `AND strftime('%Y', e.date) = ?`
+            : '';
+        const dateParams: string[] = year && month
+            ? [String(year), String(month).padStart(2, '0')]
+            : year
+            ? [String(year)]
+            : [];
+
+        const baseWhere = `WHERE e.user_id = ? ${dateFilter}`;
+        const queryParams = [uid, ...dateParams];
+
+        if (isPaginated) {
+            // Return paginated envelope so the client can implement "load more"
+            const total = (db.prepare(
+                `SELECT COUNT(*) as cnt FROM expenses e ${baseWhere}`
+            ).get(...queryParams) as any)?.cnt ?? 0;
+
+            const rows = db.prepare(
+                `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
+                 FROM expenses e
+                 JOIN categories c ON e.category_id = c.id
+                 ${baseWhere}
+                 ORDER BY e.date DESC
+                 LIMIT ? OFFSET ?`
+            ).all(...queryParams, limitVal!, offsetVal);
+
+            res.json({ data: rows, total, limit: limitVal, offset: offsetVal });
+        } else {
+            // No pagination params — return plain array (backward-compatible)
+            const rows = db.prepare(
+                `SELECT e.id, e.user_id as userId, e.amount, e.category_id as categoryId, e.description, e.date, e.created_at as createdAt, c.name as category_name
+                 FROM expenses e
+                 JOIN categories c ON e.category_id = c.id
+                 ${baseWhere}
+                 ORDER BY e.date DESC`
+            ).all(...queryParams);
+
+            res.json(rows);
+        }
     } catch (error) {
         console.error('Error fetching expenses:', error);
         res.status(500).json({ error: 'Failed to fetch expenses' });

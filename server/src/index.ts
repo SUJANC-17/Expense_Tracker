@@ -1,6 +1,9 @@
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDatabase } from './models/schema.js';
 import db from './config/db.js';
 import { startMonthlyReportScheduler, generateAndSendReport } from './services/scheduler.js';
@@ -49,6 +52,9 @@ app.use(cors({
         callback(null, false);
     },
 }));
+// Compress all HTTP responses (gzip/deflate) — placed before express.json so
+// the body parser doesn't fire on already-handled OPTIONS pre-flights.
+app.use(compression());
 app.use(express.json());
 
 // Initialize database
@@ -105,6 +111,46 @@ app.post('/api/reports/generate', authenticateToken, async (req: AuthRequest, re
         console.error('Error generating report:', error);
         res.status(500).json({ error: 'Failed to generate report' });
     }
+});
+
+// ---------------------------------------------------------------------------
+// Static frontend serving (production build)
+// ---------------------------------------------------------------------------
+// Resolve the client/dist directory relative to this compiled file.
+// In dev (tsx), __filename points to server/src/index.ts → two levels up to
+// the monorepo root, then into client/dist.
+// In production (node dist/index.js), same relative path works.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const clientDist = path.resolve(__dirname, '../../client/dist');
+
+// Hashed asset chunks (JS/CSS/images with content-hash in filename):
+// aggressively cache — 1 year, immutable.
+app.use(
+    '/assets',
+    express.static(path.join(clientDist, 'assets'), {
+        maxAge: '1y',
+        immutable: true,
+        // Don't fall through if file not found — avoids SPA catch-all hitting
+        // for non-existent asset requests.
+        fallthrough: false,
+    })
+);
+
+// Other public files (manifest, icons, service worker, vite.svg …):
+// short cache, no immutable flag.
+app.use(
+    express.static(clientDist, {
+        maxAge: '1d',
+        index: false, // index.html is handled separately below
+    })
+);
+
+// SPA fallback — serve index.html for any non-API route.
+// index.html is always revalidated so users pick up new deploys immediately.
+app.get('*', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(clientDist, 'index.html'));
 });
 
 // Start server

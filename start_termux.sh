@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Expense Tracker Termux Start Script
-# Starts backend and frontend; the tunnel can be started separately.
+# Builds client + server, then starts the backend (which serves the built frontend).
+# The tunnel is started separately via cloudflared.
 
 set -e
 
@@ -66,6 +67,8 @@ mkdir -p "$(dirname "$DB_PATH")" 2>/dev/null || true
 
 stop_stale_services
 
+load_project_env
+
 # 2. Install npm dependencies
 echo "Installing server dependencies..."
 (cd server && npm install)
@@ -73,23 +76,25 @@ echo "Installing server dependencies..."
 echo "Installing client dependencies..."
 (cd client && npm install)
 
-# 3. Start services
-echo "Starting backend on port ${PORT}..."
-(cd server && DB_PATH="$DB_PATH" HOST="$HOST" PORT="$PORT" npm run dev) &
+# 3. Build client (production — minified, hashed assets)
+echo "Building frontend (production)..."
+(cd client && npm run build)
+echo "Frontend build complete."
+
+# 4. Build server TypeScript
+echo "Compiling backend TypeScript..."
+(cd server && npm run build)
+echo "Backend compile complete."
+
+# 5. Start backend only — it serves the built frontend as static files
+echo "Starting backend on port ${PORT} (also serves frontend)..."
+(cd server && DB_PATH="$DB_PATH" HOST="$HOST" PORT="$PORT" npm start) &
 SERVER_PID=$!
-sleep 2
-
-echo "Starting frontend (Vite) on port 5173..."
-(cd client && npm run dev -- --host 0.0.0.0) &
-CLIENT_PID=$!
-
-echo "Fixing TSX permissions..."
-chmod +x server/node_modules/.bin/tsx 2>/dev/null || true
 
 echo ""
 echo "--- Services started ---"
 echo "Backend PID:  $SERVER_PID  (http://127.0.0.1:${PORT})"
-echo "Frontend PID: $CLIENT_PID  (http://127.0.0.1:5173)"
+echo "Frontend:     served by Express at http://127.0.0.1:${PORT}"
 echo "Database:     $DB_PATH"
 echo ""
 echo "Keep this session open, or run under tmux/screen."
@@ -97,11 +102,11 @@ echo ""
 
 cleanup() {
     echo "Stopping services..."
-    kill "$SERVER_PID" "$CLIENT_PID" "$TUNNEL_PID" "$WATCHDOG_PID" 2>/dev/null || true
+    kill "$SERVER_PID" "$TUNNEL_PID" "$WATCHDOG_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-# 4. Cloudflared tunnel watchdog
+# 6. Cloudflared tunnel watchdog
 TUNNEL_LOG="${SCRIPT_DIR}/tunnel.log"
 echo "Starting cloudflared tunnel watchdog..."
 
@@ -125,4 +130,5 @@ start_tunnel
 tunnel_watchdog &
 WATCHDOG_PID=$!
 
-wait $SERVER_PID $CLIENT_PID
+wait $SERVER_PID
+
