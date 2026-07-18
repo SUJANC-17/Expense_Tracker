@@ -19,3 +19,6 @@ server/data/
 !.expense_tracker.env.example
 !client/.env.example
 !server/.env.example
+tunnel.log
+server/firebase-service-account.json.bak
+server/firebase-service-account.json
