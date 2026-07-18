@@ -31,6 +31,11 @@ const Splits: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
     });
 
+    // Filter state
+    const [filterFriendId, setFilterFriendId] = useState<string>('');
+    const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+    const [filterDateTo, setFilterDateTo] = useState<string>('');
+
     useEffect(() => {
         fetchSplits();
         fetchFriends();
@@ -158,6 +163,41 @@ const Splits: React.FC = () => {
         return (total / numPeople).toFixed(2);
     };
 
+    // Derive filtered splits
+    const filteredSplits = splits.filter((split) => {
+        // Filter by friend
+        if (filterFriendId) {
+            const fid = parseInt(filterFriendId, 10);
+            if (split.friend_id !== fid) return false;
+        }
+        // Filter by date from
+        if (filterDateFrom) {
+            const splitDate = new Date(split.date);
+            const fromDate = new Date(filterDateFrom);
+            // compare date only
+            splitDate.setHours(0, 0, 0, 0);
+            fromDate.setHours(0, 0, 0, 0);
+            if (splitDate < fromDate) return false;
+        }
+        // Filter by date to
+        if (filterDateTo) {
+            const splitDate = new Date(split.date);
+            const toDate = new Date(filterDateTo);
+            splitDate.setHours(0, 0, 0, 0);
+            toDate.setHours(0, 0, 0, 0);
+            if (splitDate > toDate) return false;
+        }
+        return true;
+    });
+
+    const hasActiveFilter = filterFriendId || filterDateFrom || filterDateTo;
+
+    const clearFilters = () => {
+        setFilterFriendId('');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+    };
+
     if (loading) {
         return <div className="spinner"></div>;
     }
@@ -263,9 +303,58 @@ const Splits: React.FC = () => {
             )}
 
             <div className="data-table glass-card">
-                <h2 className="section-title">Split History</h2>
+                <div className="splits-filter-bar">
+                    <h2 className="section-title" style={{ marginBottom: 0 }}>Split History</h2>
+                    <div className="splits-filters">
+                        <div className="filter-group">
+                            <label className="filter-label">Friend</label>
+                            <select
+                                className="input-field filter-select"
+                                value={filterFriendId}
+                                onChange={(e) => setFilterFriendId(e.target.value)}
+                            >
+                                <option value="">All Friends</option>
+                                {friends.map((f) => (
+                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="filter-group">
+                            <label className="filter-label">From</label>
+                            <input
+                                type="date"
+                                className="input-field filter-date"
+                                value={filterDateFrom}
+                                onChange={(e) => setFilterDateFrom(e.target.value)}
+                            />
+                        </div>
+                        <div className="filter-group">
+                            <label className="filter-label">To</label>
+                            <input
+                                type="date"
+                                className="input-field filter-date"
+                                value={filterDateTo}
+                                onChange={(e) => setFilterDateTo(e.target.value)}
+                            />
+                        </div>
+                        {hasActiveFilter && (
+                            <button className="btn btn-secondary filter-clear-btn" onClick={clearFilters}>
+                                ✕ Clear
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {hasActiveFilter && (
+                    <p className="filter-results-info">
+                        Showing {filteredSplits.length} of {splits.length} splits
+                    </p>
+                )}
+
                 {(!Array.isArray(splits) || splits.length === 0) ? (
                     <p className="empty-state">No split expenses yet. Split your first bill!</p>
+                ) : filteredSplits.length === 0 ? (
+                    <p className="empty-state">No splits match the selected filters.</p>
                 ) : (
                     <div className="table-responsive">
                         <table className="table">
@@ -280,7 +369,7 @@ const Splits: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {splits.map((split) => (
+                                {filteredSplits.map((split) => (
                                     <tr key={split.id}>
                                         <td>{new Date(split.date).toLocaleDateString()}</td>
                                         <td className="font-medium">{split.friend_name}</td>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Split, Friend } from '../appTypes';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,16 +30,26 @@ interface SplitManagerProps {
   onUpdate: (id: number, split: Partial<Split>) => void;
   onDelete: (id: number) => void;
   onMarkPaid: (id: number) => void;
+  onMarkPaidBulk: (ids: number[]) => void;
   friends: Friend[];
 }
 
-export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid, friends }: SplitManagerProps) {
+export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid, onMarkPaidBulk, friends }: SplitManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingSplit, setEditingSplit] = useState<Split | null>(null);
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   
   const [splitMode, setSplitMode] = useState<'equal' | 'manual'>('equal');
   const [manualShares, setManualShares] = useState<Record<string, string>>({});
+
+  const [filterFriendId, setFilterFriendId] = useState<string>('');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [visibleSplitsCount, setVisibleSplitsCount] = useState(10);
+
+  useEffect(() => {
+    setVisibleSplitsCount(10);
+  }, [filterFriendId, filterDateFrom, filterDateTo]);
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -121,6 +131,57 @@ export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid
     }
   }, [formData.amount, formData.selectedFriendIds, formData.includeMyself, formData.customFriendName, splitMode, manualShares]);
 
+  const filteredSplits = useMemo(() => {
+    return splits.filter((split) => {
+      // Filter by friend
+      if (filterFriendId) {
+        const fid = parseInt(filterFriendId, 10);
+        const splitFriendId = split.friendId ?? (split as any).friend_id;
+        const targetFriend = friends.find(f => f.id === fid);
+        
+        if (splitFriendId !== undefined && splitFriendId !== null) {
+          if (splitFriendId !== fid) return false;
+        } else if (targetFriend && split.friendName) {
+          if (split.friendName.toLowerCase() !== targetFriend.name.toLowerCase()) return false;
+        } else {
+          return false;
+        }
+      }
+
+      // Filter by from date
+      if (filterDateFrom) {
+        const splitDate = new Date(split.date);
+        const fromDate = new Date(filterDateFrom);
+        splitDate.setHours(0, 0, 0, 0);
+        fromDate.setHours(0, 0, 0, 0);
+        if (splitDate < fromDate) return false;
+      }
+
+      // Filter by to date
+      if (filterDateTo) {
+        const splitDate = new Date(split.date);
+        const toDate = new Date(filterDateTo);
+        splitDate.setHours(0, 0, 0, 0);
+        toDate.setHours(0, 0, 0, 0);
+        if (splitDate > toDate) return false;
+      }
+
+      return true;
+    });
+  }, [splits, filterFriendId, filterDateFrom, filterDateTo, friends]);
+
+  const unpaidFilteredSplits = useMemo(() => {
+    return filteredSplits.filter(s => !s.isPaid);
+  }, [filteredSplits]);
+
+  const handleMarkAllPaid = () => {
+    const ids = unpaidFilteredSplits.map(s => s.id);
+    if (ids.length === 0) return;
+    if (window.confirm(`Are you sure you want to mark all ${ids.length} filtered splits as paid?`)) {
+      onMarkPaidBulk(ids);
+    }
+  };
+
   const groupedBills = useMemo(() => {
     const groups = new Map<string, {
       key: string;
@@ -132,7 +193,7 @@ export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid
       items: Split[];
     }>();
 
-    splits.forEach((split) => {
+    filteredSplits.forEach((split) => {
       const title = split.description?.trim() || 'Unlabelled Split';
       const key = `${title.toLowerCase()}|${split.date}`;
       const existing = groups.get(key) || {
@@ -155,12 +216,14 @@ export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid
       groups.set(key, existing);
     });
 
-    return [...groups.values()].sort((a, b) => {
-      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (dateDiff !== 0) return dateDiff;
-      return b.totalAmount - a.totalAmount;
-    });
-  }, [splits]);
+    return [...groups.values()]
+      .filter(group => group.outstandingAmount > 0)
+      .sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return b.totalAmount - a.totalAmount;
+      });
+  }, [filteredSplits]);
 
   const totalOutstanding = useMemo(
     () => groupedBills.reduce((sum, bill) => sum + bill.outstandingAmount, 0),
@@ -249,10 +312,21 @@ export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid
     setManualShares(prev => ({ ...prev, [personKey]: value }));
   };
 
-  const sortedSplits = [...splits].sort((a, b) => {
-    if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+  const sortedSplits = useMemo(() => {
+    return [...filteredSplits].sort((a, b) => {
+      if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  }, [filteredSplits]);
+
+  const hasActiveFilter = !!(filterFriendId || filterDateFrom || filterDateTo);
+
+  const slicedSplits = useMemo(() => {
+    if (hasActiveFilter) {
+      return sortedSplits;
+    }
+    return sortedSplits.slice(0, visibleSplitsCount);
+  }, [sortedSplits, visibleSplitsCount, hasActiveFilter]);
 
   return (
     <div className="space-y-6">
@@ -471,182 +545,296 @@ export function SplitManager({ splits, onAddBulk, onUpdate, onDelete, onMarkPaid
         </Dialog>
       </div>
 
+      {/* Filters Card */}
+      <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row md:items-end gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="filterFriend" className="text-gray-300 text-sm flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-orange-400" />
+                Filter by Friend
+              </Label>
+              <select
+                id="filterFriend"
+                value={filterFriendId}
+                onChange={(e) => setFilterFriendId(e.target.value)}
+                className="w-full h-10 rounded-md bg-white/10 border border-white/20 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+              >
+                <option value="" className="bg-slate-900 text-white">All Friends</option>
+                {friends.map((f) => (
+                  <option key={f.id} value={f.id} className="bg-slate-900 text-white">
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full md:w-44 space-y-2">
+              <Label htmlFor="filterFrom" className="text-gray-300 text-sm">
+                From Date
+              </Label>
+              <Input
+                id="filterFrom"
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="bg-white/10 border-white/20 text-white w-full h-10 px-3 cursor-pointer"
+              />
+            </div>
+
+            <div className="w-full md:w-44 space-y-2">
+              <Label htmlFor="filterTo" className="text-gray-300 text-sm">
+                To Date
+              </Label>
+              <Input
+                id="filterTo"
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="bg-white/10 border-white/20 text-white w-full h-10 px-3 cursor-pointer"
+              />
+            </div>
+
+            <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
+              {unpaidFilteredSplits.length > 0 && (
+                <Button
+                  type="button"
+                  onClick={handleMarkAllPaid}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-10 px-4 flex-1 md:flex-none flex items-center justify-center gap-1.5 font-medium"
+                >
+                  <Check className="w-4 h-4" />
+                  Paid All ({unpaidFilteredSplits.length})
+                </Button>
+              )}
+
+              {(filterFriendId || filterDateFrom || filterDateTo) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFilterFriendId('');
+                    setFilterDateFrom('');
+                    setFilterDateTo('');
+                  }}
+                  className="border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 hover:bg-red-500/10 h-10 px-4 flex-1 md:flex-none"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-gray-400">
+            <div>
+              Showing {filteredSplits.length} of {splits.length} splits
+              {unpaidFilteredSplits.length > 0 && ` (${unpaidFilteredSplits.length} pending)`}
+            </div>
+            <div>
+              Filtered Total: <span className="text-orange-400 font-semibold">₹{filteredSplits.reduce((sum, s) => sum + s.amount, 0).toFixed(2)}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-4">
-          <Card className="backdrop-blur-xl bg-white/10 border-white/20">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <ReceiptText className="w-5 h-5 text-orange-400" />
-                Bill Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {groupedBills.length > 0 ? (
-                groupedBills.map((bill) => {
-                  const isExpanded = expandedGroupKey === bill.key;
-                  const isRent = bill.title.toLowerCase().includes('rent');
-                  return (
-                    <div key={bill.key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedGroupKey((current) => current === bill.key ? null : bill.key)}
-                        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-white font-semibold">{bill.title}</p>
-                            {isRent && (
-                              <Badge className="border-orange-500/30 bg-orange-500/15 text-orange-300">
-                                Rent
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-400">
-                            {new Date(bill.date).toLocaleDateString()} • {bill.items.length} people
-                          </p>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <p className="text-sm text-orange-300 font-semibold">
-                            ₹{bill.totalAmount.toFixed(2)} total
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            ₹{bill.outstandingAmount.toFixed(2)} to collect
-                          </p>
-                        </div>
-
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                      </button>
-
-                      {isExpanded && (
-                        <div className="border-t border-white/10 px-4 py-4 space-y-3">
-                          <div className="grid grid-cols-3 gap-2 text-xs">
-                            <div className="rounded-lg bg-white/5 p-3">
-                              <p className="text-gray-400">Total</p>
-                              <p className="text-white font-semibold">₹{bill.totalAmount.toFixed(2)}</p>
+          {!hasActiveFilter && (
+            <Card className="backdrop-blur-xl bg-white/10 border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <ReceiptText className="w-5 h-5 text-orange-400" />
+                  Bill Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {groupedBills.length > 0 ? (
+                  groupedBills.map((bill) => {
+                    const isExpanded = expandedGroupKey === bill.key;
+                    const isRent = bill.title.toLowerCase().includes('rent');
+                    return (
+                      <div key={bill.key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedGroupKey((current) => current === bill.key ? null : bill.key)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-white font-semibold">{bill.title}</p>
+                              {isRent && (
+                                <Badge className="border-orange-500/30 bg-orange-500/15 text-orange-300">
+                                  Rent
+                                </Badge>
+                              )}
                             </div>
-                            <div className="rounded-lg bg-orange-500/10 p-3">
-                              <p className="text-gray-400">Pending</p>
-                              <p className="text-orange-300 font-semibold">₹{bill.outstandingAmount.toFixed(2)}</p>
-                            </div>
-                            <div className="rounded-lg bg-green-500/10 p-3">
-                              <p className="text-gray-400">Paid</p>
-                              <p className="text-green-300 font-semibold">₹{bill.paidAmount.toFixed(2)}</p>
-                            </div>
+                            <p className="text-xs text-gray-400">
+                              {new Date(bill.date).toLocaleDateString()} • {bill.items.length} people
+                            </p>
                           </div>
 
-                          <div className="space-y-2">
-                            {bill.items.map((split) => (
-                              <div
-                                key={split.id}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3"
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm text-white">{split.friendName}</p>
-                                  <p className="text-xs text-gray-400">
-                                    {split.isPaid ? 'Paid' : 'To collect'} • {new Date(split.date).toLocaleDateString()}
-                                  </p>
-                                </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <p className="text-sm text-orange-300 font-semibold">
+                              ₹{bill.totalAmount.toFixed(2)} total
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              ₹{bill.outstandingAmount.toFixed(2)} to collect
+                            </p>
+                          </div>
 
-                                <div className="flex items-center gap-2">
-                                  <span className={split.isPaid ? 'text-green-300 font-semibold' : 'text-orange-300 font-semibold'}>
-                                    ₹{split.amount.toFixed(2)}
-                                  </span>
-                                  {!split.isPaid && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => onMarkPaid(split.id)}
-                                      className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </Button>
-                                  )}
-                                </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-white/10 px-4 py-4 space-y-3">
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="rounded-lg bg-white/5 p-3">
+                                <p className="text-gray-400">Total</p>
+                                <p className="text-white font-semibold">₹{bill.totalAmount.toFixed(2)}</p>
                               </div>
-                            ))}
+                              <div className="rounded-lg bg-orange-500/10 p-3">
+                                <p className="text-gray-400">Pending</p>
+                                <p className="text-orange-300 font-semibold">₹{bill.outstandingAmount.toFixed(2)}</p>
+                              </div>
+                              <div className="rounded-lg bg-green-500/10 p-3">
+                                <p className="text-gray-400">Paid</p>
+                                <p className="text-green-300 font-semibold">₹{bill.paidAmount.toFixed(2)}</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {bill.items.map((split) => (
+                                <div
+                                  key={split.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm text-white">{split.friendName}</p>
+                                    <p className="text-xs text-gray-400">
+                                      {split.isPaid ? 'Paid' : 'To collect'} • {new Date(split.date).toLocaleDateString()}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className={split.isPaid ? 'text-green-300 font-semibold' : 'text-orange-300 font-semibold'}>
+                                      ₹{split.amount.toFixed(2)}
+                                    </span>
+                                    {!split.isPaid && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => onMarkPaid(split.id)}
+                                        className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-gray-400 text-center py-8">No bill groups yet. Add a split to see rent and other bills here.</p>
-              )}
-            </CardContent>
-          </Card>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-gray-400 text-center py-8">
+                    {filterFriendId || filterDateFrom || filterDateTo
+                      ? 'No bill groups match the selected filters.'
+                      : 'No bill groups yet. Add a split to see rent and other bills here.'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="backdrop-blur-xl bg-white/10 border-white/20">
             <CardHeader>
               <CardTitle className="text-white">Recent Splits</CardTitle>
             </CardHeader>
             <CardContent>
-              {sortedSplits.length > 0 ? (
-                <motion.div 
-                  variants={containerVariants}
-                  initial="hidden"
-                  animate="show"
-                  className="space-y-3"
-                >
-                  {sortedSplits.map((split) => (
-                    <motion.div
-                      variants={itemVariants}
-                      key={split.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-orange-400 font-bold">₹{split.amount.toFixed(2)}</span>
-                          <span className="text-gray-500">•</span>
-                          <span className="text-white">{split.friendName} owes you</span>
-                          <Badge
-                            variant={split.isPaid ? 'default' : 'secondary'}
-                            className={split.isPaid ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-orange-500/20 text-orange-300 border-orange-500/30'}
-                          >
-                            {split.isPaid ? 'Paid' : 'Unpaid'}
-                          </Badge>
+              {slicedSplits.length > 0 ? (
+                <>
+                  <motion.div 
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="show"
+                    className="space-y-3"
+                  >
+                    {slicedSplits.map((split) => (
+                      <motion.div
+                        variants={itemVariants}
+                        key={split.id}
+                        className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-orange-400 font-bold">₹{split.amount.toFixed(2)}</span>
+                            <span className="text-gray-500">•</span>
+                            <span className="text-white">{split.friendName} owes you</span>
+                            <Badge
+                              variant={split.isPaid ? 'default' : 'secondary'}
+                              className={split.isPaid ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-orange-500/20 text-orange-300 border-orange-500/30'}
+                            >
+                              {split.isPaid ? 'Paid' : 'Unpaid'}
+                            </Badge>
+                          </div>
+                          {split.description && (
+                            <p className="text-sm text-gray-300">{split.description}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(split.date).toLocaleDateString()}
+                          </p>
                         </div>
-                        {split.description && (
-                          <p className="text-sm text-gray-300">{split.description}</p>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(split.date).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        {!split.isPaid && (
+                        <div className="flex gap-2">
+                          {!split.isPaid && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onMarkPaid(split.id)}
+                              className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onMarkPaid(split.id)}
-                            className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                            onClick={() => handleEdit(split)}
+                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                           >
-                            <Check className="w-4 h-4" />
+                            <Pencil className="w-4 h-4" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(split)}
-                          className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onDelete(split.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </motion.div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDelete(split.id)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                  {sortedSplits.length > visibleSplitsCount && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setVisibleSplitsCount(prev => prev + 10)}
+                        className="text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 text-xs font-semibold px-4 py-2"
+                      >
+                        Show More
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
-                <p className="text-gray-400 text-center py-8">No split expenses yet. Add one to track shared costs!</p>
+                <p className="text-gray-400 text-center py-8">
+                  {filterFriendId || filterDateFrom || filterDateTo
+                    ? 'No splits match the selected filters.'
+                    : 'No split expenses yet. Add one to track shared costs!'}
+                </p>
               )}
             </CardContent>
           </Card>

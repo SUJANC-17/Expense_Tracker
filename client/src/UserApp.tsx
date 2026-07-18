@@ -146,6 +146,7 @@ export default function UserApp() {
         updateSplit,
         deleteSplit,
         markSplitPaid,
+        markSplitsPaidBulk,
         addFriend,
         deleteFriend,
         saveBudget,
@@ -789,6 +790,7 @@ export default function UserApp() {
                                     onUpdate={updateSplit}
                                     onDelete={deleteSplit}
                                     onMarkPaid={markSplitPaid}
+                                    onMarkPaidBulk={markSplitsPaidBulk}
                                     friends={friends}
                                 />
                             </TabsContent>

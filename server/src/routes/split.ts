@@ -7,6 +7,7 @@ import {
     addSplit,
     addSplitBulk,
     markSplitPaid,
+    markSplitsPaidBulk,
     updateSplit,
     deleteSplit,
 } from '../controllers/splitController.js';
@@ -18,6 +19,7 @@ router.get('/unpaid', authenticateToken, getUnpaidSplits);
 router.get('/balances', authenticateToken, getSplitBalances);
 router.post('/bulk', authenticateToken, addSplitBulk);
 router.post('/', authenticateToken, addSplit);
+router.put('/paid-bulk', authenticateToken, markSplitsPaidBulk);
 router.put('/:id', authenticateToken, updateSplit);
 router.put('/:id/paid', authenticateToken, markSplitPaid);
 router.delete('/:id', authenticateToken, deleteSplit);

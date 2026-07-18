@@ -229,6 +229,21 @@ export const useData = (userId: string | undefined) => {
         }
     };
 
+    const markSplitsPaidBulk = async (ids: number[]) => {
+        try {
+            const updatedList: Split[] = await apiClient.put('/splits/paid-bulk', { ids });
+            const updatedMap = new Map(updatedList.map(item => [item.id, item]));
+            setSplits(prevSplits => prevSplits.map(s => updatedMap.has(s.id) ? updatedMap.get(s.id)! : s));
+            toast.success(`${ids.length} splits marked as paid`);
+            return updatedList;
+        } catch (error) {
+            console.error('Error marking splits paid in bulk:', error);
+            toast.error('Failed to mark splits as paid');
+            throw error;
+        }
+    };
+
+
     // Friend methods
     const addFriend = async (friend: Omit<Friend, 'id'>) => {
         try {
@@ -309,6 +324,7 @@ export const useData = (userId: string | undefined) => {
         updateSplit,
         deleteSplit,
         markSplitPaid,
+        markSplitsPaidBulk,
         friends,
         addFriend,
         deleteFriend,
