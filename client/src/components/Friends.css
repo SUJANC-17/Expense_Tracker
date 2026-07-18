@@ -14,9 +14,11 @@
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.friend-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+@media (hover: hover) and (pointer: fine) {
+    .friend-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+    }
 }
 
 .friend-header {
@@ -70,8 +72,10 @@
     transition: opacity 0.2s ease;
 }
 
-.friend-card:hover .btn-delete {
-    opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+    .friend-card:hover .btn-delete {
+        opacity: 1;
+    }
 }
 
 /* Responsive adjustments */

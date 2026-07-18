@@ -219,8 +219,10 @@
     transition: transform var(--transition-base);
 }
 
-.category-item:hover {
-    transform: translateX(4px);
+@media (hover: hover) and (pointer: fine) {
+    .category-item:hover {
+        transform: translateX(4px);
+    }
 }
 
 .category-name {
@@ -290,12 +292,14 @@
     transition: background-color 0.2s ease;
 }
 
-.data-table tbody tr:hover {
-    background-color: var(--bg-tertiary);
-    /* Gentle slate-100 */
-    cursor: default;
-    transform: none;
-    /* No movement, just color change */
+@media (hover: hover) and (pointer: fine) {
+    .data-table tbody tr:hover {
+        background-color: var(--bg-tertiary);
+        /* Gentle slate-100 */
+        cursor: default;
+        transform: none;
+        /* No movement, just color change */
+    }
 }
 
 /* Status colors in table using new vars */

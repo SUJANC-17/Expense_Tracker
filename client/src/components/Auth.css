@@ -100,8 +100,10 @@
     transition: background var(--transition-base);
 }
 
-.btn-google:hover {
-    background: #000000;
+@media (hover: hover) and (pointer: fine) {
+    .btn-google:hover {
+        background: #000000;
+    }
 }
 
 .google-icon {
@@ -119,7 +121,9 @@
     transition: color var(--transition-base);
 }
 
-.toggle-btn:hover {
-    color: var(--primary);
-    text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+    .toggle-btn:hover {
+        color: var(--primary);
+        text-decoration: underline;
+    }
 }

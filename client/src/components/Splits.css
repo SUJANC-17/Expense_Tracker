@@ -42,8 +42,10 @@
     font-weight: bold;
 }
 
-.btn-check:hover {
-    color: #6ee7b7;
+@media (hover: hover) and (pointer: fine) {
+    .btn-check:hover {
+        color: #6ee7b7;
+    }
 }
 
 /* Friend Selector Chips */
@@ -64,10 +66,12 @@
     user-select: none;
 }
 
-.friend-chip:hover {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: rgba(139, 92, 246, 0.4);
-    transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+    .friend-chip:hover {
+        background: rgba(139, 92, 246, 0.1);
+        border-color: rgba(139, 92, 246, 0.4);
+        transform: translateY(-2px);
+    }
 }
 
 .friend-chip.selected {
@@ -106,8 +110,10 @@
     background: rgba(16, 185, 129, 0.1);
 }
 
-.btn-success:hover {
-    background: rgba(16, 185, 129, 0.2);
+@media (hover: hover) and (pointer: fine) {
+    .btn-success:hover {
+        background: rgba(16, 185, 129, 0.2);
+    }
 }
 
 /* ── Filter Bar ─────────────────────────────────── */
@@ -165,9 +171,11 @@
     transition: background 0.2s, border-color 0.2s;
 }
 
-.filter-clear-btn:hover {
-    background: rgba(239, 68, 68, 0.18) !important;
-    border-color: rgba(239, 68, 68, 0.6) !important;
+@media (hover: hover) and (pointer: fine) {
+    .filter-clear-btn:hover {
+        background: rgba(239, 68, 68, 0.18) !important;
+        border-color: rgba(239, 68, 68, 0.6) !important;
+    }
 }
 
 .filter-results-info {

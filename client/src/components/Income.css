@@ -93,8 +93,10 @@
     transition: background var(--transition-base);
 }
 
-.table tbody tr:hover {
-    background: var(--bg-secondary);
+@media (hover: hover) and (pointer: fine) {
+    .table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
 }
 
 .table td {
@@ -136,16 +138,22 @@
     transition: transform var(--transition-base);
 }
 
-.btn-icon:hover {
-    transform: scale(1.2);
+@media (hover: hover) and (pointer: fine) {
+    .btn-icon:hover {
+        transform: scale(1.2);
+    }
 }
 
-.btn-edit:hover {
-    filter: brightness(1.2);
+@media (hover: hover) and (pointer: fine) {
+    .btn-edit:hover {
+        filter: brightness(1.2);
+    }
 }
 
-.btn-delete:hover {
-    filter: brightness(1.2);
+@media (hover: hover) and (pointer: fine) {
+    .btn-delete:hover {
+        filter: brightness(1.2);
+    }
 }
 
 @media (max-width: 768px) {

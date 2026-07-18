@@ -113,10 +113,15 @@ echo "Keep this session open, or run under tmux/screen."
 echo ""
 
 cleanup() {
+    if [ "${CLEANED_UP:-false}" = "true" ]; then
+        return
+    fi
+    CLEANED_UP=true
     echo "Stopping services..."
     kill "$SERVER_PID" "$TUNNEL_PID" "$WATCHDOG_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+trap 'cleanup; exit 1' TSTP
 
 # 6. Cloudflared tunnel watchdog
 TUNNEL_LOG="${SCRIPT_DIR}/tunnel.log"
