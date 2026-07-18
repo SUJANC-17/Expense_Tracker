@@ -71,19 +71,31 @@ load_project_env
 
 # 2. Install npm dependencies
 echo "Installing server dependencies..."
-(cd server && npm install)
+if ! (cd server && npm install); then
+    echo "ERROR: Server npm install failed!" >&2
+    exit 1
+fi
 
 echo "Installing client dependencies..."
-(cd client && npm install)
+if ! (cd client && npm install); then
+    echo "ERROR: Client npm install failed!" >&2
+    exit 1
+fi
 
 # 3. Build client (production — minified, hashed assets)
 echo "Building frontend (production)..."
-(cd client && npm run build)
+if ! (cd client && npm run build); then
+    echo "ERROR: Frontend build failed! Stop immediately." >&2
+    exit 1
+fi
 echo "Frontend build complete."
 
 # 4. Build server TypeScript
 echo "Compiling backend TypeScript..."
-(cd server && npm run build)
+if ! (cd server && npm run build); then
+    echo "ERROR: Backend compile failed! Stop immediately." >&2
+    exit 1
+fi
 echo "Backend compile complete."
 
 # 5. Start backend only — it serves the built frontend as static files

@@ -8,7 +8,6 @@ import {
     signInWithPopup,
     signOut,
     onAuthStateChanged,
-    updatePassword,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { apiClient } from '../utils/api';
@@ -255,7 +254,7 @@ export const useAuth = () => {
 
             const credential = EmailAuthProvider.credential(currentUser.email, newPassword);
             const result = await linkWithCredential(currentUser, credential);
-            await registerSession(result.user, false);
+            await registerSession(result.user, { notifyLogin: false, allowCreate: false });
         } catch (error) {
             throw new Error(getFriendlyAuthError(error));
         }
