@@ -71,7 +71,7 @@ startCleanupScheduler();
 startDailyReminderScheduler();
 
 // Routes
-app.get('/', (req: Request, res: Response) => {
+app.get('/api', (req: Request, res: Response) => {
     res.json({ message: 'Expense Tracker API is running' });
 });
 
