@@ -90,15 +90,23 @@ keepalive_pinger() {
 }
 
 connection_watchdog() {
+    local degraded_count=0
     while true; do
         sleep 30
         conn_count=$(cloudflared tunnel info "$TUNNEL_NAME" 2>/dev/null | grep -c "^[0-9a-f]\{8\}-")
         if [ "$conn_count" -lt 4 ] && [ "$conn_count" -gt 0 ]; then
-            log "[connection-watchdog] Only $conn_count/4 edge connections — tunnel degraded"
-            # optionally restart_tunnel here, or just alert
+            degraded_count=$(( degraded_count + 1 ))
+            log "[connection-watchdog] Only $conn_count/4 edge connections — degraded ($degraded_count consecutive checks)"
+            if [ "$degraded_count" -ge 3 ]; then
+                degraded_count=0
+                restart_tunnel "connection count degraded ${conn_count}/4"
+            fi
+        else
+            degraded_count=0
         fi
     done
 }
+
 
 echo ""
 echo "╔════════════════════════════════════════════╗"
