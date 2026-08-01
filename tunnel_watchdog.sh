@@ -26,7 +26,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$TUNNEL_LOG"; }
 
 cleanup() {
     log "Stopping tunnel watchdog..."
-    kill "$TUNNEL_PID" "$HEALTH_WD_PID" "$KEEPALIVE_PID" 2>/dev/null || true
+    kill "$TUNNEL_PID" "$PROC_WD_PID" "$HEALTH_WD_PID" "$CONN_WD_PID" "$KEEPALIVE_PID" 2>/dev/null || true
     pkill -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
@@ -89,6 +89,17 @@ keepalive_pinger() {
     done
 }
 
+connection_watchdog() {
+    while true; do
+        sleep 30
+        conn_count=$(cloudflared tunnel info "$TUNNEL_NAME" 2>/dev/null | grep -c "^[0-9a-f]\{8\}-")
+        if [ "$conn_count" -lt 4 ] && [ "$conn_count" -gt 0 ]; then
+            log "[connection-watchdog] Only $conn_count/4 edge connections — tunnel degraded"
+            # optionally restart_tunnel here, or just alert
+        fi
+    done
+}
+
 echo ""
 echo "╔════════════════════════════════════════════╗"
 echo "║   Cloudflare Tunnel Watchdog (standalone)  ║"
@@ -109,6 +120,9 @@ HEALTH_WD_PID=$!
 
 keepalive_pinger &
 KEEPALIVE_PID=$!
+
+connection_watchdog &
+CONN_WD_PID=$!
 
 log "All watchdog layers active. Press Ctrl+C to stop."
 wait
