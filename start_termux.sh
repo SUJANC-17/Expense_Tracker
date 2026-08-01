@@ -16,6 +16,36 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ── tmux self-relaunch guard ──────────────────────────────────
+# If we are NOT already inside a tmux session and this is not the
+# inner (relaunched) invocation, bootstrap ourselves into one.
+TMUX_SESSION="tracker"
+
+if [ -z "${TMUX}" ] && [ "${_INSIDE_TMUX_SESSION:-}" != "1" ]; then
+    if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+        echo ""
+        echo "[INFO] A tmux session named '$TMUX_SESSION' already exists."
+        echo "       To attach:  tmux attach -t $TMUX_SESSION"
+        echo "       Exiting to avoid spawning a duplicate instance."
+        echo ""
+        exit 0
+    fi
+
+    echo ""
+    echo "[INFO] Launching script inside persistent tmux session '$TMUX_SESSION'..."
+    _INSIDE_TMUX_SESSION=1 tmux new-session -d -s "$TMUX_SESSION" \
+        "env _INSIDE_TMUX_SESSION=1 bash '$0'"
+    echo ""
+    echo "╔══════════════════════════════════════════════════════╗"
+    echo "║  Script is now running in tmux session: $TMUX_SESSION         ║"
+    echo "║  To attach:  tmux attach -t $TMUX_SESSION                     ║"
+    echo "║  Safe to close this terminal / SSH session now.      ║"
+    echo "╚══════════════════════════════════════════════════════╝"
+    echo ""
+    exit 0
+fi
+# ──────────────────────────────────────────────────────────────
+
 # ── Configuration ─────────────────────────────────────────────
 PROJECT_ENV_FILE="${PROJECT_ENV_FILE:-$SCRIPT_DIR/.expense_tracker.env}"
 export DB_PATH="${DB_PATH:-/sdcard/Documents/ExpenseTracker/expense_tracker.db}"
@@ -55,6 +85,8 @@ cleanup() {
     done
     # Kill any stray cloudflared processes started by this session
     pkill -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null || true
+    # Release Android wake-lock if we acquired one
+    termux-wake-unlock 2>/dev/null || true
     log "All services stopped."
 }
 trap cleanup EXIT INT TERM
@@ -260,6 +292,10 @@ echo "║     Expense Tracker — 24/7 Termux Start Script      ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
+# Acquire Android wake-lock so Termux is not killed while in background
+log "Acquiring Termux wake-lock..."
+termux-wake-lock 2>/dev/null || log "WARNING: termux-wake-lock unavailable (non-Termux env?)."
+
 ensure_storage
 check_deps
 stop_stale_services
@@ -292,7 +328,7 @@ KEEPALIVE_PID=$!
 log "Keep-alive pinger PID: $KEEPALIVE_PID"
 
 echo ""
-log "All services running. Tip: run this inside 'tmux' or 'screen' for true 24/7 uptime."
+log "All services running persistently inside tmux session '$TMUX_SESSION'."
 log "Press Ctrl+C to stop everything."
 echo ""
 
