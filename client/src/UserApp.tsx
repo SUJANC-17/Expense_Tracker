@@ -63,9 +63,7 @@ const navItems = [
     { value: 'income', label: 'Income', icon: TrendingUp },
     { value: 'expenses', label: 'Expenses', icon: TrendingDown },
     { value: 'splits', label: 'Splits', icon: Users },
-    { value: 'friends', label: 'Friends', icon: UserPlus },
-    { value: 'settings', label: 'Settings', icon: Settings2 },
-] as const;
+];
 
 const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
     reminderEnabled: true,
@@ -474,6 +472,24 @@ export default function UserApp() {
                                             </div>
                                         </DropdownMenuLabel>
                                         <DropdownMenuSeparator className="bg-white/10" />
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={() => {
+                                                handleTabChange('friends');
+                                            }}
+                                        >
+                                            <UserPlus className="h-4 w-4 text-emerald-300" />
+                                            Friends
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                            onSelect={() => {
+                                                handleTabChange('settings');
+                                            }}
+                                        >
+                                            <Settings2 className="h-4 w-4 text-gray-300" />
+                                            Settings
+                                        </DropdownMenuItem>
                                         {hasProvider(user, 'password') ? (
                                             <DropdownMenuItem
                                                 className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
@@ -629,6 +645,24 @@ export default function UserApp() {
                                                 </div>
                                             </DropdownMenuLabel>
                                             <DropdownMenuSeparator className="bg-white/10" />
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={() => {
+                                                    handleTabChange('friends');
+                                                }}
+                                            >
+                                                <UserPlus className="h-4 w-4 text-emerald-300" />
+                                                Friends
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
+                                                onSelect={() => {
+                                                    handleTabChange('settings');
+                                                }}
+                                            >
+                                                <Settings2 className="h-4 w-4 text-gray-300" />
+                                                Settings
+                                            </DropdownMenuItem>
                                             {hasProvider(user, 'password') ? (
                                                 <DropdownMenuItem
                                                     className="cursor-pointer px-3 py-2 text-sm text-gray-200 focus:bg-white/10 focus:text-white"
