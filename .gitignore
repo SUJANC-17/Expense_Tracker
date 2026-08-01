@@ -4,6 +4,8 @@ client/.env
 server/.env
 *.env
 server/firebase-service-account.json
+*.bak
+*.tsbuildinfo
 
 
 # Build and dependency output
