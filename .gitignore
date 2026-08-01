@@ -2,7 +2,9 @@
 .expense_tracker.env
 client/.env
 server/.env
+*.env
 server/firebase-service-account.json
+
 
 # Build and dependency output
 client/node_modules/
