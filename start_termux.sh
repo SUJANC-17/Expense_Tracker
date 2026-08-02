@@ -79,15 +79,16 @@ tlog() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$TUNNEL_LOG"; }
 cleanup() {
     if [ "${_CLEANED_UP:-false}" = "true" ]; then return; fi
     _CLEANED_UP=true
-    log "Shutting down all services..."
-    for pid in "$KEEPALIVE_PID" "$HEALTH_WATCHDOG_PID" "$PROCESS_WATCHDOG_PID" "$TUNNEL_PID" "$SERVER_PID"; do
+    log "Stopping Expense Tracker backend and watchdogs..."
+    # NOTE: The cloudflared tunnel is intentionally NOT killed here — it also
+    # carries SSH remote access (ssh.expensetrack.qzz.io) which must remain
+    # alive independently of the web backend.
+    for pid in "$KEEPALIVE_PID" "$HEALTH_WATCHDOG_PID" "$PROCESS_WATCHDOG_PID" "$SERVER_PID"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
-    # Kill any stray cloudflared processes started by this session
-    pkill -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null || true
     # Release Android wake-lock if we acquired one
     termux-wake-unlock 2>/dev/null || true
-    log "All services stopped."
+    log "Expense Tracker backend and watchdogs stopped. Tunnel and SSH access remain active."
 }
 trap cleanup EXIT INT TERM
 

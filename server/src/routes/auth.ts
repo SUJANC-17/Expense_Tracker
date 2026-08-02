@@ -6,6 +6,7 @@ import type { AuthRequest } from '../middleware/auth.js';
 import { createUserTables } from '../models/userSchema.js';
 import { sendLoginNotification } from '../services/emailService.js';
 import { createOtpChallenge, verifyOtpChallenge } from '../services/authOtpService.js';
+import { activityLog, actorLabel } from '../utils/activityLog.js';
 
 const router = express.Router();
 
@@ -125,6 +126,7 @@ router.post('/signup/verify-otp', async (req, res) => {
     });
 
     const user = upsertUserFromAuth(created.uid, email, username, ['password'], created.photoURL || null);
+    activityLog(actorLabel({ username, email }), 'signed up');
     res.status(201).json({ message: 'Account created', user });
   } catch (error: any) {
     if (error?.code === 'auth/email-already-exists') {
@@ -308,8 +310,10 @@ router.post('/register', authenticateToken, async (req: AuthRequest, res) => {
 router.post('/login', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { uid, email } = req.user!;
-    const userRow = db.prepare('SELECT email FROM users WHERE id = ? OR email = ?').get(uid, email || null) as any;
+    const userRow = db.prepare('SELECT username, email FROM users WHERE id = ? OR email = ?').get(uid, email || null) as any;
     const targetEmail = email || userRow?.email;
+
+    activityLog(actorLabel({ username: userRow?.username, email: targetEmail, uid }), 'logged in');
 
     if (targetEmail) {
       await sendLoginNotification(targetEmail);

@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
+import { activityLog, actorLabel } from '../utils/activityLog.js';
 
 // Get all expenses for user (supports optional ?limit=N&offset=M&year=YYYY&month=MM)
 export const getExpenses = (req: AuthRequest, res: Response): void => {
@@ -84,6 +85,7 @@ export const addExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'INSERT INTO expenses (user_id, amount, category_id, description, date) VALUES (?, ?, ?, ?, ?)'
         ).run(uid, amount, finalCategoryId, description || null, date);
@@ -93,7 +95,14 @@ export const addExpense = (req: AuthRequest, res: Response): void => {
              FROM expenses e
              JOIN categories c ON e.category_id = c.id 
              WHERE e.id = ? AND e.user_id = ?`
-        ).get(result.lastInsertRowid, uid);
+        ).get(result.lastInsertRowid, uid) as any;
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `added expense ₹${amount} (${newExpense?.category_name ?? finalCategoryId})${
+                description ? ` — "${description}"` : ''
+            }`
+        );
 
         res.status(201).json({
             ...newExpense as object,
@@ -113,6 +122,7 @@ export const updateExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'UPDATE expenses SET amount = ?, category_id = ?, description = ?, date = ? WHERE id = ? AND user_id = ?'
         ).run(amount, finalCategoryId, description, date, id, uid);
@@ -127,7 +137,13 @@ export const updateExpense = (req: AuthRequest, res: Response): void => {
              FROM expenses e
              JOIN categories c ON e.category_id = c.id
              WHERE e.id = ? AND e.user_id = ?`
-        ).get(id, uid);
+        ).get(id, uid) as any;
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `updated expense #${id} → ₹${amount} (${updated?.category_name ?? finalCategoryId})`
+        );
+
         res.json(updated);
     } catch (error) {
         console.error('Error updating expense:', error);
@@ -141,6 +157,7 @@ export const deleteExpense = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'DELETE FROM expenses WHERE id = ? AND user_id = ?'
         ).run(id, uid);
@@ -149,6 +166,11 @@ export const deleteExpense = (req: AuthRequest, res: Response): void => {
             res.status(404).json({ error: 'Expense not found' });
             return;
         }
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `deleted expense #${id}`
+        );
 
         res.json({ message: 'Expense deleted successfully' });
     } catch (error) {

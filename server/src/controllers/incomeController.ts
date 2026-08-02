@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import db from '../config/db.js';
+import { activityLog, actorLabel } from '../utils/activityLog.js';
 
 // Get all incomes for user (supports optional ?limit=N&offset=M&year=YYYY&month=MM)
 export const getIncomes = (req: AuthRequest, res: Response): void => {
@@ -67,12 +68,20 @@ export const addIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'INSERT INTO incomes (user_id, amount, source, description, date) VALUES (?, ?, ?, ?, ?)'
         ).run(uid, amount, source, description || null, date);
         const newIncome = db.prepare(
             'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE id = ? AND user_id = ?'
         ).get(result.lastInsertRowid, uid);
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `added income ₹${amount} (${source})${
+                description ? ` — "${description}"` : ''
+            }`
+        );
 
         res.status(201).json({
             ...newIncome as object,
@@ -91,6 +100,7 @@ export const updateIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'UPDATE incomes SET amount = ?, source = ?, description = ?, date = ? WHERE id = ? AND user_id = ?'
         ).run(amount, source, description, date, id, uid);
@@ -103,6 +113,12 @@ export const updateIncome = (req: AuthRequest, res: Response): void => {
         const updated = db.prepare(
             'SELECT id, user_id as userId, amount, source, description, date, created_at as createdAt FROM incomes WHERE id = ? AND user_id = ?'
         ).get(id, uid);
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `updated income #${id} → ₹${amount} (${source})`
+        );
+
         res.json(updated);
     } catch (error) {
         console.error('Error updating income:', error);
@@ -116,6 +132,7 @@ export const deleteIncome = (req: AuthRequest, res: Response): void => {
 
     try {
         const uid = req.user?.uid!;
+        const userRow = db.prepare('SELECT username, email FROM users WHERE id = ?').get(uid) as any;
         const result = db.prepare(
             'DELETE FROM incomes WHERE id = ? AND user_id = ?'
         ).run(id, uid);
@@ -124,6 +141,11 @@ export const deleteIncome = (req: AuthRequest, res: Response): void => {
             res.status(404).json({ error: 'Income not found' });
             return;
         }
+
+        activityLog(
+            actorLabel({ username: userRow?.username, email: userRow?.email, uid }),
+            `deleted income #${id}`
+        );
 
         res.json({ message: 'Income deleted successfully' });
     } catch (error) {
