@@ -26,3 +26,8 @@ server/data/
 tunnel.log
 server/firebase-service-account.json.bak
 server/firebase-service-account.json
+start_termux.sh
+tunnel_watchdog.sh
+keepalive_watchdog.sh
+health_watchdog.sh
+server_watchdog.sh  
