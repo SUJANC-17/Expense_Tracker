@@ -95,7 +95,10 @@ trap cleanup EXIT INT TERM
 # ── Stop stale services from previous runs ────────────────────
 stop_stale_services() {
     log "Stopping leftover processes from previous runs..."
-    pkill -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null || true
+    # NOTE: cloudflared is intentionally NOT killed here — the tunnel also
+    # carries SSH access (ssh.expensetrack.qzz.io) which must stay alive
+    # independently of the web backend. start_tunnel() will adopt the
+    # existing process if it is already running.
     pkill -f "node.*server" 2>/dev/null || true
 
     if command -v lsof >/dev/null 2>&1; then
@@ -192,9 +195,21 @@ start_server() {
 # ── Start cloudflared tunnel ──────────────────────────────────
 start_tunnel() {
     tlog "Starting cloudflared tunnel '$TUNNEL_NAME'..."
+
+    # If cloudflared is already running (e.g. tunnel survived a backend
+    # restart, or SSH is actively using it), adopt its PID instead of
+    # spawning a duplicate connection.
+    local existing_pid
+    existing_pid=$(pgrep -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null | head -1)
+    if [ -n "$existing_pid" ]; then
+        tlog "Tunnel already running (PID $existing_pid) — adopting existing process."
+        TUNNEL_PID=$existing_pid
+        return 0
+    fi
+
     cloudflared tunnel run "$TUNNEL_NAME" >> "$TUNNEL_LOG" 2>&1 &
     TUNNEL_PID=$!
-    tlog "Tunnel PID: $TUNNEL_PID"
+    tlog "Tunnel started (PID: $TUNNEL_PID)"
     sleep 5   # give cloudflared time to connect
 }
 
