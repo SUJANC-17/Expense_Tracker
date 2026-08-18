@@ -29,3 +29,6 @@ server/firebase-service-account.json
 keepalive_watchdog.sh
 health_watchdog.sh
 server_watchdog.sh
+start_tunnel.bat
+start_termux.sh
+tunnel_watchdog.sh
