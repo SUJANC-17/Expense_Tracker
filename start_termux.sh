@@ -121,7 +121,7 @@ load_project_env() {
 # ── Dependency check ──────────────────────────────────────────
 check_deps() {
     log "Checking system dependencies..."
-    TERMUX_PKGS=(nodejs git wget curl)
+    TERMUX_PKGS=(nodejs git wget curl openssh)
     need_install=false
     for pkg in "${TERMUX_PKGS[@]}"; do
         if ! command -v "$pkg" >/dev/null 2>&1; then
@@ -170,6 +170,17 @@ build_all() {
     (cd server && npm run build) || { log "ERROR: Backend compile failed"; exit 1; }
 
     log "Build complete."
+}
+
+# ── Start SSH Server ──────────────────────────────────────────
+start_sshd() {
+    log "Starting SSH Server (sshd)..."
+    if ! pgrep -x "sshd" >/dev/null; then
+        sshd
+        log "sshd started on port 8022."
+    else
+        log "sshd is already running."
+    fi
 }
 
 # ── Start backend server ──────────────────────────────────────
@@ -318,6 +329,7 @@ check_deps
 stop_stale_services
 load_project_env
 build_all
+start_sshd
 start_server
 
 echo ""
