@@ -70,6 +70,7 @@ TUNNEL_PID=""
 PROCESS_WATCHDOG_PID=""
 HEALTH_WATCHDOG_PID=""
 KEEPALIVE_PID=""
+LOG_ROTATE_PID=""
 # ──────────────────────────────────────────────────────────────
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -83,7 +84,7 @@ cleanup() {
     # NOTE: The cloudflared tunnel is intentionally NOT killed here — it also
     # carries SSH remote access (ssh.expensetrack.qzz.io) which must remain
     # alive independently of the web backend.
-    for pid in "$KEEPALIVE_PID" "$HEALTH_WATCHDOG_PID" "$PROCESS_WATCHDOG_PID" "$SERVER_PID"; do
+    for pid in "$KEEPALIVE_PID" "$HEALTH_WATCHDOG_PID" "$PROCESS_WATCHDOG_PID" "$LOG_ROTATE_PID" "$SERVER_PID"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
     # Release Android wake-lock if we acquired one
@@ -157,6 +158,18 @@ ensure_storage() {
 
 # ── Build steps ───────────────────────────────────────────────
 build_all() {
+    BUILD_HASH_FILE="$SCRIPT_DIR/.last_build_hash"
+    current_hash=$(find server/src client/src server/package.json client/package.json \
+        -type f 2>/dev/null | sort | xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1)
+
+    if [ -f "$BUILD_HASH_FILE" ] && [ -d "server/dist" ] && [ -d "client/dist" ]; then
+        last_hash=$(cat "$BUILD_HASH_FILE" 2>/dev/null || echo "")
+        if [ "$current_hash" = "$last_hash" ]; then
+            log "Source unchanged since last build — skipping rebuild."
+            return 0
+        fi
+    fi
+
     log "Installing server dependencies..."
     (cd server && npm install) || { log "ERROR: Server npm install failed"; exit 1; }
 
@@ -169,15 +182,29 @@ build_all() {
     log "Compiling backend TypeScript..."
     (cd server && npm run build) || { log "ERROR: Backend compile failed"; exit 1; }
 
+    echo "$current_hash" > "$BUILD_HASH_FILE"
     log "Build complete."
 }
 
 # ── Start SSH Server ──────────────────────────────────────────
+ensure_ssh_keys() {
+    if [ ! -f "$PREFIX/etc/ssh/ssh_host_rsa_key" ]; then
+        log "SSH host keys missing — generating (one-time)..."
+        ssh-keygen -A
+    fi
+}
+
 start_sshd() {
     log "Starting SSH Server (sshd)..."
+    ensure_ssh_keys
     if ! pgrep -x "sshd" >/dev/null; then
         sshd
-        log "sshd started on port 8022."
+        sleep 1
+        if pgrep -x "sshd" >/dev/null; then
+            log "sshd started on port 8022."
+        else
+            log "ERROR: sshd failed to start even after key check — inspect manually."
+        fi
     else
         log "sshd is already running."
     fi
@@ -211,14 +238,14 @@ start_tunnel() {
     # restart, or SSH is actively using it), adopt its PID instead of
     # spawning a duplicate connection.
     local existing_pid
-    existing_pid=$(pgrep -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null | head -1)
+    existing_pid=$(pgrep -f "cloudflared tunnel run --token" 2>/dev/null | head -1)
     if [ -n "$existing_pid" ]; then
         tlog "Tunnel already running (PID $existing_pid) — adopting existing process."
         TUNNEL_PID=$existing_pid
         return 0
     fi
 
-    setsid cloudflared tunnel run "$TUNNEL_NAME" >> "$TUNNEL_LOG" 2>&1 &
+    setsid cloudflared tunnel run --token "$TUNNEL_TOKEN" >> "$TUNNEL_LOG" 2>&1 &
     TUNNEL_PID=$!
     disown "$TUNNEL_PID"
     tlog "Tunnel started (PID: $TUNNEL_PID)"
@@ -232,7 +259,7 @@ restart_tunnel() {
     tlog "RESTART TRIGGER: $reason"
     tlog "Killing existing tunnel (PID $TUNNEL_PID)..."
     kill "$TUNNEL_PID" 2>/dev/null || true
-    pkill -f "cloudflared tunnel run $TUNNEL_NAME" 2>/dev/null || true
+    pkill -f "cloudflared tunnel run --token" 2>/dev/null || true
     sleep 2
 
     tlog "Waiting ${_tunnel_restart_backoff}s before restart (backoff)..."
@@ -310,6 +337,23 @@ keepalive_pinger() {
     done
 }
 
+# ── Layer 4: Log rotate watchdog ──────────────────────────────
+log_rotate_watchdog() {
+    MAX_LOG_BYTES=$((5 * 1024 * 1024))
+    while true; do
+        sleep 3600   # hourly
+        for f in "$TUNNEL_LOG" "$SERVER_LOG"; do
+            if [ -f "$f" ]; then
+                size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+                if [ "$size" -gt "$MAX_LOG_BYTES" ]; then
+                    tail -c 1048576 "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+                    log "[log-rotate] Trimmed $f (was ${size} bytes)."
+                fi
+            fi
+        done
+    done
+}
+
 # ═════════════════════════════════════════════════════════════
 #  MAIN
 # ═════════════════════════════════════════════════════════════
@@ -355,6 +399,10 @@ log "Health watchdog PID:  $HEALTH_WATCHDOG_PID"
 keepalive_pinger &
 KEEPALIVE_PID=$!
 log "Keep-alive pinger PID: $KEEPALIVE_PID"
+
+log_rotate_watchdog &
+LOG_ROTATE_PID=$!
+log "Log rotate watchdog PID: $LOG_ROTATE_PID"
 
 echo ""
 log "All services running persistently inside tmux session '$TMUX_SESSION'."
